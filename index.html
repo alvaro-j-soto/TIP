@@ -1,924 +1,1045 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Shift Start Confirmation & Coverage — MVP Prototype</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TIP Research Prototypes — TeamSense</title>
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- React 18.2 from cdnjs (verified available) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- react-is: required peer dep for Recharts UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/react-is@18.2.0/umd/react-is.production.min.js"></script>
+  <!-- Recharts 3.2.1 from cdnjs (confirmed available on cdnjs.com/libraries/recharts) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/3.2.1/Recharts.min.js"></script>
+  <!-- Babel standalone for JSX transpilation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'Inter',system-ui,sans-serif; background:#f0f2f5; }
-    .chat-scroll::-webkit-scrollbar { width:4px; }
-    .chat-scroll::-webkit-scrollbar-thumb { background:#ccc; border-radius:4px; }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes dotPulse { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
-    .animate-fade { animation:fadeIn .35s ease-out; }
-    .dot-1 { animation:dotPulse 1.4s infinite; animation-delay:0s; }
-    .dot-2 { animation:dotPulse 1.4s infinite; animation-delay:.2s; }
-    .dot-3 { animation:dotPulse 1.4s infinite; animation-delay:.4s; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Urbanist', system-ui, sans-serif; background: #F5FAF8; }
+    #proto-nav {
+      position: sticky; top: 0; z-index: 100;
+      background: #1a2b28; padding: 0 32px;
+      display: flex; align-items: center; gap: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    #proto-nav .nav-brand {
+      font-size: 13px; font-weight: 700; color: #6DAEA2;
+      letter-spacing: 1px; margin-right: 32px; padding: 14px 0;
+    }
+    #proto-nav button {
+      background: none; border: none; color: rgba(255,255,255,0.6);
+      font-family: 'Urbanist', system-ui, sans-serif;
+      font-size: 14px; font-weight: 600; padding: 14px 20px;
+      cursor: pointer; border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    #proto-nav button:hover { color: white; }
+    #proto-nav button.active { color: white; border-bottom-color: #F6B725; }
+    #proto-nav .label {
+      font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      margin-left: 6px; vertical-align: middle;
+    }
+    .label-v1 { background: #6DAEA2; color: white; }
+    .label-v15 { background: #F6B725; color: #263D39; }
+    .label-prd { background: #263D39; color: #F6B725; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><div style="padding:40px;font-family:system-ui;color:#666">Loading prototypes...</div></div>
+
+  <script>
+    // Pre-flight check: verify all CDN libraries loaded
+    window.addEventListener('DOMContentLoaded', function() {
+      var checks = [
+        { name: 'React (cdnjs)', ok: typeof React !== 'undefined' },
+        { name: 'ReactDOM (cdnjs)', ok: typeof ReactDOM !== 'undefined' },
+        { name: 'react-is (jsdelivr)', ok: typeof ReactIs !== 'undefined' },
+        { name: 'Recharts (jsdelivr)', ok: typeof Recharts !== 'undefined' },
+      ];
+      var missing = checks.filter(function(c) { return !c.ok; }).map(function(c) { return c.name; });
+      if (missing.length > 0) {
+        document.getElementById('root').innerHTML =
+          '<div style="padding:40px;font-family:system-ui;color:red">' +
+          '<h2>CDN Load Error</h2>' +
+          '<p>Failed to load: <strong>' + missing.join(', ') + '</strong></p>' +
+          '<p>Loaded OK: ' + checks.filter(function(c){return c.ok;}).map(function(c){return c.name;}).join(', ') + '</p>' +
+          '<p style="margin-top:12px;color:#666">Try refreshing, or check browser console (F12) for blocked network requests.</p></div>';
+      }
+    });
+  </script>
+
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState } = React;
+    const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+            LineChart, Line, Legend, Cell, Area, AreaChart, ReferenceLine, PieChart, Pie } = Recharts;
 
-    // ===== BRAND =====
-    const B = {
-      teal: '#0D4F4F',
-      tealLight: '#1a8a8a',
-      offWhite: '#F0F5F4',
-      orange: '#E87C3E',
-    };
+    /* ============================================================
+       PROTOTYPE 1: CONTENT INSIGHTS DASHBOARD
+       ============================================================ */
+    const topicData = [
+      { topic: "PTO / Time Off Policy", questions: 847, trend: "+28%", quality: 62, gap: true, priority: 1 },
+      { topic: "Shift Schedule & Hours", questions: 623, trend: "+12%", quality: 78, gap: false, priority: null },
+      { topic: "Benefits & Insurance", questions: 541, trend: "+5%", quality: 45, gap: true, priority: 2 },
+      { topic: "Pay & Direct Deposit", questions: 498, trend: "-3%", quality: 88, gap: false, priority: null },
+      { topic: "Safety Protocols", questions: 412, trend: "+41%", quality: 34, gap: true, priority: 3 },
+      { topic: "Meal Kit Assembly Process", questions: 387, trend: "+8%", quality: 71, gap: false, priority: null },
+      { topic: "Attendance Points", questions: 356, trend: "+15%", quality: 52, gap: true, priority: 4 },
+      { topic: "Holiday Schedule", questions: 298, trend: "-12%", quality: 91, gap: false, priority: null },
+      { topic: "Parking & Transportation", questions: 187, trend: "+2%", quality: 83, gap: false, priority: null },
+      { topic: "Uniform & Dress Code", questions: 134, trend: "-5%", quality: 89, gap: false, priority: null },
+    ];
 
-    // ============================================================
-    // CONVERSATION SCENES — Pure SMS, natural language
-    // Each scene: agent messages + optional suggested replies
-    // Suggested replies are just hints — the real product uses
-    // free-form natural language. We use them here because this
-    // is a clickable prototype, not a real LLM.
-    // ============================================================
-    const SCENES = {
-      start: {
-        messages: [
-          {
-            from: 'agent',
-            text: "Hi Sal. Line A as of 6:05 AM — 14 clocked in, looking good. A few things that need your eyes:\n\nMaria Garcia — no punch, no call-off. She's been reliable — only 1 late arrival in the last 90 days. This is unusual for her.\n\nKevin Park — scheduled but hasn't punched in yet. He was late twice last month.\n\nEveryone else checked out — 14 confirmed via badge data.\n\nLet me know about Maria and Kevin when you can.",
-            time: '6:05 AM',
-            delay: 2500,
-          },
-        ],
-        replies: [
-          { label: "Maria is NCNS, she didn't call anyone. Kevin just texted me, he's running late.", next: 'batch-confirm' },
-          { label: "Maria called me directly — she's sick today, excused.", next: 'maria-excused' },
-          { label: "Haven't heard from either. Give them 15 more minutes.", next: 'defer' },
-        ],
-      },
+    const trendDataP1 = [
+      { month: "Sep", total: 2890, resolved: 2340 },
+      { month: "Oct", total: 3120, resolved: 2510 },
+      { month: "Nov", total: 3450, resolved: 2680 },
+      { month: "Dec", total: 2980, resolved: 2390 },
+      { month: "Jan", total: 3680, resolved: 2870 },
+      { month: "Feb", total: 4283, resolved: 3210 },
+    ];
 
-      // ---- BATCH CONFIRM (most common path) ----
-      'batch-confirm': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it.\n\n• Maria Garcia — NCNS confirmed. No call, points will apply (3 pts, she's now at 4 total).\n• Kevin Park — late arrival, sounds like it's not his fault. Marking as late, excused — no points.\n\nMaria's position on Line A needs coverage. How do you want to handle it — moving someone on-site, or should I text the available list?",
-            time: '6:06 AM',
-            delay: 2200,
-          },
-        ],
-        replies: [
-          { label: "I'll put Rodriguez on her station.", next: 'onsite-rebalance' },
-          { label: "Yeah, text the list and see who can come in.", next: 'external-outreach' },
-          { label: "We're fine — line can handle it with one fewer.", next: 'absorbed' },
-        ],
-        context: {
-          title: 'Consequence Validation',
-          body: "Notice what just happened: The system already detected Maria had no punch and no call-off. Sal didn't confirm an attendance fact — she validated the CLASSIFICATION (NCNS) and its CONSEQUENCE (points apply). For Kevin, she reclassified the system's 'missed punch' detection to 'late, excused' — overriding the consequence. This is consequence validation, not attendance confirmation.",
-          tier: "Both responses create Tier 1 (supervisor-confirmed) records — the highest quality data. Sal's batch reply was parsed as two distinct classification decisions.",
-          coverage: "The three coverage paths reflect UXR data: 12 of 16 manufacturing companies rebalance on-site before reaching out externally. On-site rebalancing is the primary path, not an afterthought.",
-        },
-      },
+    const barChartData = topicData.map(d => ({
+      name: d.topic.length > 20 ? d.topic.substring(0, 18) + "..." : d.topic,
+      fullName: d.topic, questions: d.questions, quality: d.quality, gap: d.gap,
+    }));
 
-      // ---- ON-SITE REBALANCING ----
-      'onsite-rebalance': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it — logging Rodriguez covering for Maria on Line A. On-site rebalance recorded.\n\nThat's everyone accounted for. Kevin should be in soon. I'll let you know if anything changes.\n\nHave a good shift, Sal.",
-            time: '6:07 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "How many call-offs have we had this week?", next: 'followup-calloffs' },
-          { label: "Is Maria usually reliable?", next: 'followup-maria' },
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'On-Site Rebalancing (Primary Path)',
-          body: "Sal said 'I'll put Rodriguez on her station' — the agent understood the intent and logged it as structured data: absent employee (Maria), covering employee (Rodriguez), coverage type (on-site-rebalance), supervisor (Sal), line, shift, timestamp.",
-          tier: "This creates a Tier 1 confirmation + coverage record. Today, this kind of on-site rebalancing is INVISIBLE to every system — no one records that Rodriguez moved stations. The MVP makes it visible.",
-          coverage: "Coverage type: on-site-rebalance. TEDS now has a record of how Sal solved coverage. Over time, this data reveals patterns: which supervisors rebalance vs. request external help, which positions are easy to cover internally, what the typical adapt-vs-backfill ratio is per line.",
-        },
-      },
-
-      // ---- EXTERNAL OUTREACH ----
-      'external-outreach': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Sending texts to the available list now. I'll let you know who responds.",
-            time: '6:07 AM',
-            delay: 1200,
-          },
-          {
-            from: 'agent',
-            text: "Update — Lisa Chen replied she can cover. Still waiting on Jose Martinez and Tom Davis.\n\nWant me to confirm Lisa for Line A?",
-            time: '6:12 AM',
-            delay: 3000,
-          },
-        ],
-        replies: [
-          { label: "Yeah, put Lisa on it. Thanks.", next: 'lisa-confirmed' },
-          { label: "Wait for Jose too — he's faster on that line.", next: 'wait-jose' },
-        ],
-        context: {
-          title: 'External Outreach (Secondary Path)',
-          body: "Sal said 'text the list' — the agent sent SMS to a pre-configured available-for-coverage list. The agent monitors responses and reports back conversationally. Sal doesn't need to check a dashboard or switch apps.",
-          tier: "The outreach, responses, and final assignment are all logged: who was asked, who responded, who accepted, time-to-coverage. Coverage type: external-outreach.",
-          coverage: "This creates the dataset for Stage 2 recommendations. When the system eventually learns to RANK candidates, it will use this history: Lisa's acceptance rate, response time, supervisor preference patterns.",
-        },
-      },
-
-      'lisa-confirmed': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Done — Lisa confirmed for Line A. I let her know to head over.\n\nEveryone's accounted for. Have a good shift, Sal.",
-            time: '6:13 AM',
-            delay: 1500,
-          },
-        ],
-        replies: [
-          { label: "Did Kevin ever clock in?", next: 'followup-kevin' },
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Coverage Secured',
-          body: "Full coverage chain recorded: Maria absent > Sal requested external outreach > 3 people texted > Lisa accepted in 5 min > Sal confirmed. Time-to-coverage: 6 minutes.",
-          tier: "Tier 1 confirmation + external-outreach coverage. Every step is a data point for Stage 2.",
-          coverage: "TEDS now stores: coverage type (external-outreach), candidates contacted (3), accepted (Lisa), time-to-coverage (6 min), supervisor confirmation. This is the seed data for automated backfill.",
-        },
-      },
-
-      'wait-jose': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it, holding on Lisa. I'll let you know when Jose responds.",
-            time: '6:13 AM',
-            delay: 1200,
-          },
-          {
-            from: 'agent',
-            text: "Jose just replied — he can be there by 6:30. Want me to confirm Jose instead of Lisa?",
-            time: '6:16 AM',
-            delay: 3000,
-          },
-        ],
-        replies: [
-          { label: "Yeah, go with Jose.", next: 'jose-confirmed' },
-          { label: "Actually Lisa is fine, she's already closer.", next: 'lisa-confirmed' },
-        ],
-        context: {
-          title: 'Supervisor Preference Override',
-          body: "Sal chose to wait for Jose because 'he's faster on that line.' This is exactly the supervisor judgment that Stage 2 recommendations need to learn from — not just who's available, but who the supervisor prefers for a given position and why.",
-          tier: "The wait decision + final selection are both logged. Stage 2 will learn: Sal prefers Jose for Line A positions, even when Lisa responds first.",
-          coverage: "This interaction reveals a signal that no system currently captures: positional preference. Sal knows Jose is better for this particular station. Future recommendations should rank Jose higher for Line A coverage.",
-        },
-      },
-
-      'jose-confirmed': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Jose confirmed for Line A, arriving by 6:30. I let Lisa know she's not needed today.\n\nEveryone's accounted for. Have a good shift, Sal.",
-            time: '6:17 AM',
-            delay: 1500,
-          },
-        ],
-        replies: [
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Coverage Secured (Jose)',
-          body: "Coverage chain: Maria absent > external outreach > Lisa available first > Sal waited for Jose > Jose confirmed. Sal's preference for Jose over Lisa is captured as a signal.",
-          tier: "Tier 1 + external-outreach. Time-to-coverage: 10 minutes (longer because Sal chose to wait).",
-          coverage: "The system now knows: (1) Lisa responds faster, (2) Sal prefers Jose for Line A. Stage 2 can use both signals.",
-        },
-      },
-
-      // ---- ABSORBED (no coverage needed) ----
-      'absorbed': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it — logging Maria's absence as managed without additional coverage. Line A running one short.\n\nKevin should be in soon. I'll let you know if anything changes. Have a good shift, Sal.",
-            time: '6:07 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "How many people do I usually run short?", next: 'followup-short' },
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Absorbed — No Coverage Needed',
-          body: "Sal said 'we're fine' — a deliberate operational decision. The system records this as coverage type 'absorbed' rather than treating it as no action taken. This is critical: 'absorbed' is different from 'no response.'",
-          tier: "Tier 1 confirmation + absorbed coverage. The decision to NOT seek coverage is just as valuable as the decision to seek it.",
-          coverage: "Over time, 'absorbed' patterns reveal which positions can run short without production impact — informing future staffing models and whether coverage outreach is even necessary for certain gaps.",
-        },
-      },
-
-      // ---- MARIA EXCUSED (reclassification) ----
-      'maria-excused': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it — Maria reclassified to excused absence, no points. She called you directly so it wasn't in the system.\n\nHer spot on Line A still needs someone. How do you want to handle it — moving someone over, or should I text the list?\n\nThat leaves Kevin — any word on him?",
-            time: '6:06 AM',
-            delay: 2200,
-          },
-        ],
-        replies: [
-          { label: "I'll shift Rodriguez over for Maria. Kevin texted me, he's just late — don't count it.", next: 'excused-resolve' },
-          { label: "Text the list for Maria's spot. Kevin is NCNS — never heard from him.", next: 'excused-outreach' },
-        ],
-        context: {
-          title: 'Reclassification — Consequence Override',
-          body: "Sal said 'she called me directly — excused.' The system detected NCNS (no punch, no call-off in the system), but Sal has information the system doesn't: Maria called her directly. Sal's reclassification OVERRIDES the system's detection and changes the consequence from 'NCNS + 3 points' to 'excused + no points.'",
-          tier: "This creates a Tier 1 (actively corrected) record — the highest quality. The correction rate (how often supervisors override the agent) is a key learning metric: it tells us how accurate the agent's initial categorization is.",
-          coverage: "Even with an excused absence, the position still needs coverage. The three coverage paths apply regardless of classification — because the operational problem (someone is missing) is the same.",
-        },
-      },
-
-      'excused-resolve': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Done.\n\n• Maria — excused absence, Rodriguez covering on Line A (on-site rebalance)\n• Kevin — late arrival, excused, no points\n\nEveryone accounted for. Have a good shift, Sal.",
-            time: '6:07 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Two Classifications in One Reply',
-          body: "Sal handled both Maria and Kevin in a single natural language reply. The agent parsed: (1) Maria coverage with Rodriguez, (2) Kevin late arrival excused. Two classification decisions, two coverage decisions, one message.",
-          tier: "Both are Tier 1. The agent understood 'shift Rodriguez over' as on-site rebalancing and 'don't count it' as excused/no points. Natural language makes multi-exception handling effortless.",
-          coverage: "Two coverage outcomes in one reply: Maria coverage via on-site-rebalance (Rodriguez), Kevin no coverage needed (he's coming in). All logged as structured data.",
-        },
-      },
-
-      'excused-outreach': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it.\n\n• Maria — excused absence, texting the available list for Line A coverage now.\n• Kevin — NCNS confirmed. No call, points will apply (3 pts, now at 5 total).\n\nI'll let you know who responds for Maria's spot.",
-            time: '6:06 AM',
-            delay: 2000,
-          },
-          {
-            from: 'agent',
-            text: "Lisa Chen can cover Line A — she responded right away. Confirm her?",
-            time: '6:11 AM',
-            delay: 3000,
-          },
-        ],
-        replies: [
-          { label: "Yes, put Lisa on it.", next: 'excused-lisa-done' },
-        ],
-        context: {
-          title: 'Mixed Classifications + External Outreach',
-          body: "Two different classifications in one reply: Maria (excused) and Kevin (NCNS). Two different consequences: no points for Maria, 3 points for Kevin. External outreach initiated for Maria's coverage.",
-          tier: "Both Tier 1. Maria corrected from suspected NCNS to excused. Kevin confirmed as NCNS. Coverage: external-outreach for Maria's position.",
-          coverage: "Even though Maria is excused (not NCNS), her position still needs coverage. The coverage trigger fires on the gap, not the classification.",
-        },
-      },
-
-      'excused-lisa-done': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Lisa confirmed for Line A. Everyone's accounted for.\n\nKevin's NCNS — that's his 2nd this quarter. I'll include the pattern in your shift digest.\n\nHave a good shift, Sal.",
-            time: '6:12 AM',
-            delay: 1500,
-          },
-        ],
-        replies: [
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Coverage Complete + Pattern Note',
-          body: "The agent adds context: Kevin's NCNS is his 2nd this quarter. This isn't an alert that demands action now — it's a note that will be expanded in the digest when Sal has bandwidth to think about it.",
-          tier: "All Tier 1. Lisa confirmed via external outreach. Kevin's pattern flagged for digest.",
-          coverage: "Coverage: Maria via external-outreach (Lisa). Kevin no coverage needed (NCNS, position empty). Both logged in TEDS with full chain of events.",
-        },
-      },
-
-      // ---- DEFER ----
-      'defer': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Will do — I'll check back on Maria and Kevin at 6:20. If either of them punches in before then, I'll let you know right away.",
-            time: '6:06 AM',
-            delay: 1500,
-          },
-          {
-            from: 'agent',
-            text: "Update: Kevin just badged in at 6:18. He's on the floor.\n\nStill nothing from Maria — no punch, no call-off. Want to call it NCNS, or give her more time?",
-            time: '6:20 AM',
-            delay: 4000,
-          },
-        ],
-        replies: [
-          { label: "Kevin's fine. Maria is NCNS at this point.", next: 'deferred-ncns' },
-          { label: "Kevin's fine. Let me try calling Maria real quick.", next: 'deferred-wait' },
-        ],
-        context: {
-          title: 'Deferred Confirmation',
-          body: "Sal asked for 15 more minutes. The agent set a timer and proactively checked back. Meanwhile, Kevin's badge data resolved automatically — no supervisor action needed. This is the agent working for Sal, not the other way around.",
-          tier: "Kevin auto-resolves to agent-confirmed (Tier 2) when badge data arrives. Maria is still unresolved, waiting for Sal's classification. If Sal never responds, Maria stays at agent-confirmed tier after the 30-minute window.",
-          coverage: "No coverage triggered yet — Maria's classification is still pending. Coverage prompt will follow once Sal makes the call.",
-        },
-      },
-
-      'deferred-ncns': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Done.\n\n• Kevin — present, on time. No points.\n• Maria — NCNS confirmed. 3 points applied (now at 4 total).\n\nMaria's spot on Line A — how do you want to handle it?",
-            time: '6:21 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "I already moved Chen over there. We're covered.", next: 'deferred-covered' },
-          { label: "Text the list, see who's available.", next: 'external-outreach' },
-          { label: "We'll run one short, it's fine.", next: 'absorbed' },
-        ],
-        context: {
-          title: 'Deferred then Confirmed NCNS',
-          body: "15 minutes later, Sal made the call: Maria is NCNS. Notice that Sal may have ALREADY moved someone to cover Maria's position during the wait — the 'I already moved Chen' option captures coverage decisions that happened outside the conversation.",
-          tier: "Kevin: Tier 2 (agent-confirmed via badge). Maria: Tier 1 (supervisor-confirmed NCNS). The different tiers reflect the different confirmation methods.",
-          coverage: "Three coverage options. The first option — 'I already moved Chen' — is important: supervisors often handle coverage physically before texting. The agent needs to capture these retroactive decisions.",
-        },
-      },
-
-      'deferred-covered': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it — logging Chen covering for Maria on Line A. On-site rebalance recorded.\n\nAll set. Have a good shift, Sal.",
-            time: '6:22 AM',
-            delay: 1500,
-          },
-        ],
-        replies: [
-          { label: "(Wait for shift digest)", next: 'digest' },
-        ],
-        context: {
-          title: 'Retroactive Coverage Capture',
-          body: "Sal moved Chen BEFORE texting back. The agent captures the decision retroactively. In today's world, this kind of on-site rebalancing is completely invisible — no system records it. The MVP makes it visible.",
-          tier: "Tier 1 + on-site-rebalance. Even though the physical coverage happened before the text, the structured record is created now.",
-          coverage: "Critical insight: coverage decisions often happen physically (walking over, tapping someone on the shoulder) before they're communicated digitally. The agent must capture retroactive coverage decisions through natural conversation.",
-        },
-      },
-
-      'deferred-wait': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Take your time. I'll keep an eye out for Maria's badge data.",
-            time: '6:21 AM',
-            delay: 1200,
-          },
-        ],
-        replies: [
-          { label: "OK I called her — she's sick. Excused.", next: 'deferred-excused' },
-          { label: "No answer. Mark her NCNS.", next: 'deferred-ncns' },
-        ],
-        context: {
-          title: 'Supervisor Investigation',
-          body: "Sal is calling Maria directly — investigating before making a classification. This is the human judgment the system can't replicate. The agent waits patiently.",
-          tier: "No classification yet. Maria remains unresolved until Sal decides. The 30-minute window is still running.",
-          coverage: "No coverage triggered until classification is confirmed. The agent doesn't assume — it waits for Sal.",
-        },
-      },
-
-      'deferred-excused': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Got it — Maria marked as excused absence (called you directly, sick). No points.\n\nHer spot on Line A still needs someone though. Moving someone over, or should I text the list?",
-            time: '6:23 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "Already moved Chen. We're good.", next: 'deferred-covered' },
-          { label: "Text the list.", next: 'external-outreach' },
-          { label: "We're fine short-handed.", next: 'absorbed' },
-        ],
-        context: {
-          title: 'Investigation then Excused',
-          body: "Sal called Maria, found out she's sick, and reclassified to excused. This is exactly the scenario the system can't handle alone — Maria didn't use the system to call off, she called Sal directly. Without Sal's input, this stays as suspected NCNS forever.",
-          tier: "Tier 1 — supervisor actively corrected the classification based on information only she had.",
-          coverage: "Same three coverage paths. The operational problem (empty position) is the same regardless of whether Maria is NCNS or excused.",
-        },
-      },
-
-      // ---- FOLLOW-UP Q&A ----
-      'followup-calloffs': {
-        messages: [
-          {
-            from: 'agent',
-            text: "This week on Line A: 4 call-offs total.\n\nMon — David Lee (PTO, pre-approved)\nTue — clean shift, everyone in\nWed — Aisha Brooks (late 45 min, car trouble)\nToday — Maria Garcia (NCNS)\n\nThat's a bit above your 30-day average of 2.1 per week. Anything else?",
-            time: '6:08 AM',
-            delay: 2000,
-          },
-        ],
-        replies: [
-          { label: "Is Maria usually reliable?", next: 'followup-maria' },
-          { label: "That's all, thanks.", next: 'digest' },
-        ],
-        context: {
-          title: 'Conversational Follow-Up (CR-6)',
-          body: "Sal asked a natural follow-up question and got an answer from the same conversation. The Attendance agent already handles this query — the MVP connects it to the shift start context. No app switching, no dashboard lookup.",
-          tier: "Follow-up Q&A doesn't change confirmation tiers — it's informational. But follow-up USAGE is a tracked learning metric: what do supervisors want to know?",
-          coverage: "N/A — this is informational, not a coverage decision.",
-        },
-      },
-
-      'followup-maria': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Maria Garcia — generally reliable. Over the last 90 days:\n\n• 1 late arrival (Feb 3, 20 min, excused)\n• 0 NCNS before today\n• 0 call-offs\n• Current points: 4 (after today's NCNS)\n\nToday's NCNS is unusual for her. No prior pattern.",
-            time: '6:09 AM',
-            delay: 2000,
-          },
-        ],
-        replies: [
-          { label: "Good to know. That's all.", next: 'digest' },
-        ],
-        context: {
-          title: 'Employee History Query',
-          body: "Sal asked 'Is Maria usually reliable?' — the NCNS agent already answers this exact question. The agent provides factual history without making a recommendation. The supervisor draws their own conclusion.",
-          tier: "Informational. The agent surfaces data; the supervisor interprets it.",
-          coverage: "N/A — informational.",
-        },
-      },
-
-      'followup-kevin': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Yes — Kevin badged in at 6:22 AM. He's on the floor.\n\nHis late arrival was already marked as excused (car trouble, per your earlier confirmation). No points applied.",
-            time: '6:25 AM',
-            delay: 1800,
-          },
-        ],
-        replies: [
-          { label: "Great, thanks.", next: 'digest' },
-        ],
-        context: {
-          title: 'Status Check Follow-Up',
-          body: "Sal checked back on Kevin an hour later — the agent answered from the same conversation thread, with full context of what was already discussed and decided.",
-          tier: "No tier change — informational. The agent remembered the earlier excused classification and confirmed Kevin's current status.",
-          coverage: "N/A — Kevin is now present.",
-        },
-      },
-
-      'followup-short': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Over the last 30 days, Line A ran one short 6 times out of 22 shifts (27%). You absorbed the gap without external coverage each time.\n\nWhen you did bring someone in, average time-to-coverage was 8 minutes.",
-            time: '6:08 AM',
-            delay: 2000,
-          },
-        ],
-        replies: [
-          { label: "Got it, thanks.", next: 'digest' },
-        ],
-        context: {
-          title: 'Operational Pattern Query',
-          body: "This is the kind of question that NO system answers today. The agent can answer it because the MVP logs adaptation decisions — creating the dataset that makes this query possible.",
-          tier: "Informational. But notice: this answer is only possible because prior shifts logged 'absorbed' coverage decisions. Without adaptation logging (CR-5), this data wouldn't exist.",
-          coverage: "N/A — meta-analysis of past coverage patterns.",
-        },
-      },
-
-      // ---- SHIFT DIGEST ----
-      'digest': {
-        messages: [
-          {
-            from: 'agent',
-            text: "Line A shift wrap-up:\n\n14 of 16 on the floor\n3 exceptions resolved:\n  — Maria Garcia: NCNS (confirmed by you), covered\n  — Kevin Park: late, excused (car trouble)\n  — All coverage handled\n\nPoints digest:\n  — Maria Garcia: now at 4 pts (next threshold: verbal warning at 5 pts). May want to check in with her next shift.\n\nConfirmation quality: 100% supervisor-confirmed for today's exceptions.\n\nFull details: ts.link/sal/line-a/feb-16",
-            time: '6:35 AM',
-            delay: 3000,
-          },
-        ],
-        replies: [
-          { label: "Restart Demo", next: '__restart__' },
-        ],
-        context: {
-          title: 'Supervisor Shift Digest (CR-7)',
-          body: "The digest closes the loop. Key design decision: points threshold alerts ('Maria is at 4/5 pts') appear HERE — not during the shift-start triage flow. At shift start, Sal needs to run the line. Points conversations happen after the line is running.",
-          tier: "The digest summarizes today's confirmation quality. 100% supervisor-confirmed means every exception was actively classified by Sal — the best possible data quality.",
-          coverage: "The coverage summary shows what happened. The mobile web link (ts.link/...) provides richer detail: full roster, timeline, coverage chain. This is the bridge to detail that SMS can't efficiently carry.",
-        },
-      },
-    };
-
-    // ============================================================
-    // COMPONENTS
-    // ============================================================
-
-    // Typing indicator
-    const TypingDots = () => (
-      <div className="animate-fade" style={{display:'flex',alignItems:'flex-end',gap:8,padding:'4px 16px'}}>
-        <div style={{width:28,height:28,borderRadius:'50%',background:B.teal,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <span style={{color:'white',fontSize:12,fontWeight:700}}>T</span>
-        </div>
-        <div style={{background:'#e8e8e8',borderRadius:'16px 16px 16px 4px',padding:'10px 16px',display:'flex',gap:4}}>
-          <span className="dot-1" style={{width:6,height:6,borderRadius:'50%',background:'#999',display:'block'}}/>
-          <span className="dot-2" style={{width:6,height:6,borderRadius:'50%',background:'#999',display:'block'}}/>
-          <span className="dot-3" style={{width:6,height:6,borderRadius:'50%',background:'#999',display:'block'}}/>
-        </div>
-      </div>
-    );
-
-    // Chat message bubble
-    const ChatBubble = ({ msg }) => {
-      const isUser = msg.from === 'user';
+    const QualityBadge = ({ score }) => {
+      const color = score >= 80 ? "#16a34a" : score >= 60 ? "#F6B725" : "#BF4B08";
+      const bg = score >= 80 ? "#f0fdf4" : score >= 60 ? "#fefce8" : "#fff7ed";
+      const label = score >= 80 ? "Strong" : score >= 60 ? "Fair" : "Needs Work";
       return (
-        <div className="animate-fade" style={{display:'flex',flexDirection:'column',alignItems:isUser?'flex-end':'flex-start',padding:'4px 16px',gap:4}}>
-          <div style={{display:'flex',alignItems:'flex-end',gap:8,maxWidth:'85%',flexDirection:isUser?'row-reverse':'row'}}>
-            {!isUser && (
-              <div style={{width:28,height:28,borderRadius:'50%',background:B.teal,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{color:'white',fontSize:12,fontWeight:700}}>T</span>
-              </div>
-            )}
-            <div style={{
-              background:isUser?'#0B93F6':'#e8e8e8',
-              color:isUser?'white':'#1a1a1a',
-              borderRadius:isUser?'18px 18px 4px 18px':'18px 18px 18px 4px',
-              padding:'10px 14px',
-              fontSize:14,
-              lineHeight:'1.45',
-              whiteSpace:'pre-line',
-            }}>
-              {msg.text}
-            </div>
-          </div>
-          <span style={{fontSize:11,color:'#999',padding:isUser?'0 4px 0 0':'0 0 0 36px'}}>{msg.time}</span>
-        </div>
-      );
-    };
-
-    // SMS channel indicator
-    const SMSBadge = () => (
-      <div style={{display:'flex',justifyContent:'center',padding:'8px 0'}}>
-        <span style={{background:'#f0f0f0',color:'#888',fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:12}}>
-          SMS · Text Message
+        <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"2px 10px", borderRadius:12, backgroundColor:bg, color, fontSize:13, fontWeight:600 }}>
+          <span style={{ width:8, height:8, borderRadius:"50%", backgroundColor:color }} />
+          {score}% — {label}
         </span>
-      </div>
-    );
-
-    // Reply suggestions
-    const ReplySuggestions = ({ replies, onReply }) => (
-      <div style={{padding:'8px 12px 12px',borderTop:'1px solid #eee',background:'white'}}>
-        <div style={{fontSize:10,color:'#999',marginBottom:6,textAlign:'center',fontStyle:'italic'}}>
-          In production, Sal types freely. Tap a suggested reply to continue:
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
-          {replies.map((r, i) => (
-            <button key={i} onClick={() => onReply(r)}
-              style={{
-                background:'white',border:'1.5px solid #d0d0d0',borderRadius:20,padding:'8px 14px',
-                fontSize:13,color:'#333',cursor:'pointer',textAlign:'left',lineHeight:'1.3',
-                transition:'all .15s',
-              }}
-              onMouseOver={e => {e.target.style.background='#f5f5f5';e.target.style.borderColor=B.tealLight}}
-              onMouseOut={e => {e.target.style.background='white';e.target.style.borderColor='#d0d0d0'}}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-
-    // Context Panel
-    const ContextPanel = ({ context }) => {
-      if (!context) return (
-        <div style={{flex:'1 1 380px',maxWidth:420,minWidth:320}}>
-          <div style={{background:'white',borderRadius:16,border:'1px solid #e0e0e0',padding:24}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
-              <div style={{width:32,height:32,borderRadius:8,background:B.offWhite,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontSize:16}}>📋</span>
-              </div>
-              <div>
-                <h3 style={{fontWeight:700,fontSize:14,color:B.teal}}>Design Context</h3>
-                <p style={{fontSize:11,color:'#999'}}>For engineering & design review</p>
-              </div>
-            </div>
-            <p style={{fontSize:13,color:'#666',lineHeight:'1.5'}}>
-              Tap a reply in the conversation to see design rationale for each interaction step.
-            </p>
-            <div style={{marginTop:16,padding:12,background:'#f8f9fa',borderRadius:8}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Key MVP Principles</div>
-              <div style={{fontSize:12,color:'#555',lineHeight:'1.6'}}>
-                <p style={{marginBottom:8}}><strong>SMS-only.</strong> No RCS, no rich cards, no structured inputs. Natural language via SMS — like texting a knowledgeable colleague.</p>
-                <p style={{marginBottom:8}}><strong>Consequence validation.</strong> Supervisors confirm classifications and consequences — not attendance facts the system already knows.</p>
-                <p style={{marginBottom:8}}><strong>Dual-path coverage.</strong> On-site rebalancing (primary, 12/16 companies) + external outreach (secondary) + absorbed.</p>
-                <p style={{marginBottom:8}}><strong>Points in digest.</strong> Threshold alerts appear after the line is running — not during triage.</p>
-                <p><strong>3-tier quality model.</strong> Supervisor-confirmed / Agent-confirmed / Unconfirmed. (Expands to 6 tiers in later stages.)</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-
-      return (
-        <div className="animate-fade" style={{flex:'1 1 380px',maxWidth:420,minWidth:320}} key={context.title}>
-          <div style={{background:'white',borderRadius:16,border:'1px solid #e0e0e0',padding:24}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
-              <div style={{width:32,height:32,borderRadius:8,background:B.offWhite,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontSize:16}}>📋</span>
-              </div>
-              <div>
-                <h3 style={{fontWeight:700,fontSize:14,color:B.teal}}>Design Context</h3>
-                <p style={{fontSize:11,color:'#999'}}>For engineering & design review</p>
-              </div>
-            </div>
-
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:4}}>Current Step</div>
-              <div style={{fontWeight:700,color:B.teal,fontSize:15}}>{context.title}</div>
-            </div>
-
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>What's Happening</div>
-              <p style={{fontSize:12,color:'#555',lineHeight:'1.6',background:'#f8f9fa',padding:12,borderRadius:8}}>
-                {context.body}
-              </p>
-            </div>
-
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Confirmation Quality</div>
-              <p style={{fontSize:12,color:'#555',lineHeight:'1.6',background:'#f0f5f4',padding:12,borderRadius:8,borderLeft:'3px solid '+B.tealLight}}>
-                {context.tier}
-              </p>
-            </div>
-
-            <div>
-              <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}}>Coverage & Data</div>
-              <p style={{fontSize:12,color:'#555',lineHeight:'1.6',background:'#fff8f0',padding:12,borderRadius:8,borderLeft:'3px solid '+B.orange}}>
-                {context.coverage}
-              </p>
-            </div>
-          </div>
-        </div>
       );
     };
 
-    // Phone frame
-    const PhoneFrame = ({ children }) => (
-      <div style={{width:375,flexShrink:0}}>
-        <div style={{border:'8px solid #1a1a1a',borderRadius:36,background:'white',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
-          <div style={{background:'#1a1a1a',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 20px',fontSize:12,fontWeight:600}}>
-            <span>9:41</span>
-            <span style={{display:'flex',gap:4,alignItems:'center'}}>
-              <span style={{fontSize:10}}>5G</span>
-              <span style={{letterSpacing:1}}>||||</span>
-            </span>
-          </div>
-          <div style={{background:'white',borderBottom:'1px solid #eee',padding:'10px 16px',display:'flex',alignItems:'center',gap:10}}>
-            <div style={{width:34,height:34,borderRadius:'50%',background:B.teal,display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <span style={{color:'white',fontSize:14,fontWeight:800}}>T</span>
-            </div>
+    const TrendBadge = ({ trend }) => {
+      const isUp = trend.startsWith("+");
+      const val = parseInt(trend);
+      const color = Math.abs(val) > 20 ? "#BF4B08" : isUp ? "#263D39" : "#16a34a";
+      return <span style={{ color, fontSize:13, fontWeight:600 }}>{isUp ? "↑" : "↓"} {trend}</span>;
+    };
+
+    const gapDetails = {
+      "PTO / Time Off Policy": "Employees frequently ask about PTO accrual rates, rollover policies, and blackout dates. Many questions go unresolved or get routed to HR. Content exists but doesn't cover site-specific rules.",
+      "Benefits & Insurance": "Open enrollment questions spike seasonally. Current EA content covers basic plan info but can't answer questions about eligibility changes, life events, or HSA details.",
+      "Safety Protocols": "Sharp increase tied to new OSHA requirements. EA has outdated safety content that doesn't reflect January 2026 policy updates. High volume of repeat questions about PPE requirements.",
+      "Attendance Points": "Employees ask about their current balance, how points are calculated, and when points expire. EA cannot pull live points data — routes all questions to HR.",
+    };
+
+    const recDetails = {
+      "PTO / Time Off Policy": { text: "Update EA knowledge base with site-specific PTO rules for Aurora, Newark, and Irving. Current content is generic — employees at each site have different accrual rates and blackout periods.", impact: "Could resolve ~320 questions/month that currently go to HR." },
+      "Benefits & Insurance": { text: "Add life event and eligibility change content. Most unresolved questions are about mid-year changes (marriage, new child, address change) — not basic plan info.", impact: "Could resolve ~298 questions/month during non-enrollment periods." },
+      "Safety Protocols": { text: "Replace outdated safety content with January 2026 OSHA updates. Specific gap: PPE requirements for cold storage areas and new chemical handling procedures.", impact: "Could resolve ~272 questions/month. Also a compliance risk — employees may be following outdated procedures." },
+      "Attendance Points": { text: "Add FAQ content explaining points calculation, expiration timelines, and threshold consequences. Note: Live balance lookup requires integration work (future roadmap).", impact: "Could resolve ~171 questions/month. Remaining gap (live balance) requires product work." },
+    };
+
+    function ContentInsights() {
+      const [activeView, setActiveView] = useState("topics");
+      const gaps = topicData.filter(d => d.gap).sort((a, b) => a.priority - b.priority);
+
+      return (
+        <div style={{ backgroundColor:"#F5FAF8", minHeight:"100vh" }}>
+          <div style={{ backgroundColor:"#263D39", color:"white", padding:"20px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
-              <div style={{fontWeight:700,fontSize:14,color:'#1a1a1a'}}>TeamSense</div>
-              <div style={{fontSize:11,color:'#999'}}>SMS · Shift Start Agent</div>
+              <div style={{ fontSize:13, opacity:0.7, marginBottom:4, letterSpacing:0.5 }}>TEAMSENSE INSIGHTS</div>
+              <div style={{ fontSize:24, fontWeight:700 }}>Content Insights</div>
             </div>
-          </div>
-          <div style={{height:560}}>
-            {children}
-          </div>
-        </div>
-      </div>
-    );
-
-    // Welcome overlay
-    const WelcomeOverlay = ({ onStart }) => (
-      <div style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.6)',backdropFilter:'blur(4px)'}}>
-        <div className="animate-fade" style={{background:'white',borderRadius:20,maxWidth:640,width:'100%',margin:16,overflow:'hidden',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
-          <div style={{padding:'32px 32px 16px'}}>
-            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:8}}>
-              <div style={{width:40,height:40,borderRadius:12,background:B.teal,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <span style={{color:'white',fontSize:20,fontWeight:800}}>T</span>
-              </div>
-              <div>
-                <h1 style={{fontWeight:800,fontSize:20,color:B.teal}}>Shift Start Confirmation & Coverage</h1>
-                <p style={{fontSize:13,color:'#999'}}>MVP Prototype — SMS Natural Language</p>
-              </div>
-            </div>
-          </div>
-
-          <div style={{padding:'0 32px 16px'}}>
-            <p style={{fontSize:14,color:'#444',lineHeight:'1.6'}}>
-              This prototype demonstrates the <strong>MVP experience for Supervisor Sal</strong> — an AI-composed SMS conversation at shift start. Sal confirms attendance <strong>classifications and consequences</strong> through natural language, then handles coverage through <strong>on-site rebalancing</strong>, <strong>external outreach</strong>, or <strong>absorb</strong>. Points alerts appear in the <strong>end-of-shift digest</strong>, not during triage.
-            </p>
-          </div>
-
-          <div style={{padding:'0 32px 16px'}}>
-            <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:12}}>What This Demonstrates (8 Core Capabilities)</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              {[
-                { num:'CR-1', label:'AI-composed shift summary with names and context' },
-                { num:'CR-2', label:'Natural language SMS confirmation (consequence validation)' },
-                { num:'CR-3', label:'Confirmation storage with 3-tier quality signal' },
-                { num:'CR-4', label:'Coverage action trigger (dual-path: on-site + external)' },
-                { num:'CR-5', label:'Adaptation logging (on-site-rebalance / external / absorbed)' },
-                { num:'CR-6', label:'Conversational follow-up Q&A' },
-                { num:'CR-7', label:'Supervisor shift digest with points alerts' },
-                { num:'CR-8', label:'HR daily digest (described, not shown — email format)' },
-              ].map((item, i) => (
-                <div key={i} style={{display:'flex',gap:8,alignItems:'flex-start',fontSize:12}}>
-                  <span style={{background:B.offWhite,color:B.teal,fontWeight:700,fontSize:10,padding:'2px 6px',borderRadius:4,flexShrink:0,marginTop:1}}>{item.num}</span>
-                  <span style={{color:'#555',lineHeight:'1.4'}}>{item.label}</span>
-                </div>
+            <div style={{ display:"flex", gap:8 }}>
+              {["All Sites","Aurora, CO","Newark, NJ","Irving, TX"].map(s => (
+                <button key={s} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid rgba(255,255,255,0.3)", backgroundColor: s==="All Sites"?"rgba(255,255,255,0.2)":"transparent", color:"white", cursor:"pointer", fontSize:13, fontWeight:500 }}>{s}</button>
               ))}
             </div>
           </div>
 
-          <div style={{padding:'0 32px 16px'}}>
-            <div style={{fontSize:11,fontWeight:600,color:'#999',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>How to Interact</div>
-            <p style={{fontSize:12,color:'#666',lineHeight:'1.5'}}>
-              In production, Sal types freely — the agent uses LLM-powered natural language understanding. In this prototype, <strong>tap suggested replies</strong> to navigate branching conversation paths. The <strong>context panel</strong> (right side) explains the design rationale at each step.
-            </p>
+          <div style={{ backgroundColor:"white", padding:"12px 32px", borderBottom:"1px solid #e5e7eb", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, color:"#6b7280", fontWeight:500 }}>Filters:</span>
+            {["Last 30 Days","All Shifts","All Departments","All Languages"].map(f => (
+              <button key={f} style={{ padding:"5px 12px", borderRadius:6, border:"1px solid #d1d5db", backgroundColor:"white", fontSize:13, cursor:"pointer", color:"#374151" }}>{f} ▾</button>
+            ))}
+            <div style={{ flex:1 }} />
+            <button style={{ padding:"6px 16px", borderRadius:6, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:13, fontWeight:600, cursor:"pointer" }}>Export Report</button>
           </div>
 
-          <div style={{padding:'0 32px'}}>
-            <div style={{display:'flex',gap:12,alignItems:'center',padding:'12px 16px',background:'#f8f9fa',borderRadius:12,marginBottom:16}}>
-              <span style={{background:'#f0f0f0',color:'#888',fontSize:11,fontWeight:700,padding:'3px 10px',borderRadius:12}}>SMS</span>
-              <span style={{fontSize:12,color:'#666'}}>Entire MVP is SMS-only. RCS rich cards are Vision Layer 3 — <strong>not in this MVP</strong>.</span>
-            </div>
+          <div style={{ padding:"24px 32px 0", display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16 }}>
+            {[
+              { label:"Total Questions", value:"4,283", sub:"Last 30 days", accent:false },
+              { label:"Avg Resolution Quality", value:"69%", sub:"↑ 3% from last month", accent:false },
+              { label:"Content Gaps Found", value:"4", sub:"Topics needing attention", accent:true },
+              { label:"Top Trending Topic", value:"Safety Protocols", sub:"↑ 41% this month", accent:true },
+            ].map((c,i) => (
+              <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:20, border: c.accent?"2px solid #F6B725":"1px solid #e5e7eb" }}>
+                <div style={{ fontSize:13, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{c.label}</div>
+                <div style={{ fontSize:28, fontWeight:700, color:"#263D39" }}>{c.value}</div>
+                <div style={{ fontSize:12, color:"#6DAEA2", marginTop:4, fontWeight:500 }}>{c.sub}</div>
+              </div>
+            ))}
           </div>
 
-          <div style={{padding:'0 32px 32px'}}>
-            <button onClick={onStart}
-              style={{width:'100%',padding:'14px',borderRadius:12,background:B.teal,color:'white',fontWeight:700,fontSize:14,border:'none',cursor:'pointer'}}
-              onMouseOver={e => e.target.style.opacity='.9'}
-              onMouseOut={e => e.target.style.opacity='1'}>
-              Start the Demo
-            </button>
+          <div style={{ padding:"24px 32px 0", display:"flex", gap:4 }}>
+            {[{id:"topics",label:"Topic Demand"},{id:"gaps",label:"Content Gaps"},{id:"recommendations",label:"What to Fix Next"}].map(tab => (
+              <button key={tab.id} onClick={() => setActiveView(tab.id)} style={{ padding:"10px 20px", borderRadius:"8px 8px 0 0", border:"none", cursor:"pointer", fontSize:14, fontWeight:600, backgroundColor: activeView===tab.id?"white":"transparent", color: activeView===tab.id?"#263D39":"#6b7280", borderBottom: activeView===tab.id?"2px solid #F6B725":"2px solid transparent" }}>
+                {tab.label}
+                {tab.id==="gaps" && <span style={{ marginLeft:8, backgroundColor:"#BF4B08", color:"white", borderRadius:10, padding:"1px 8px", fontSize:11, fontWeight:700 }}>4</span>}
+              </button>
+            ))}
           </div>
-        </div>
-      </div>
-    );
 
-    // ============================================================
-    // MAIN APP
-    // ============================================================
-    function App() {
-      const [messages, setMessages] = useState([]);
-      const [replies, setReplies] = useState([]);
-      const [typing, setTyping] = useState(false);
-      const [context, setContext] = useState(null);
-      const [showWelcome, setShowWelcome] = useState(true);
-      const [started, setStarted] = useState(false);
-      const chatRef = useRef(null);
-      const timeoutsRef = useRef([]);
-
-      const sched = (fn, ms) => {
-        const id = setTimeout(fn, ms);
-        timeoutsRef.current.push(id);
-      };
-
-      useEffect(() => {
-        if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-      }, [messages, typing]);
-
-      useEffect(() => {
-        return () => timeoutsRef.current.forEach(id => clearTimeout(id));
-      }, []);
-
-      const playScene = (sceneId, userMsg) => {
-        if (sceneId === '__restart__') {
-          timeoutsRef.current.forEach(id => clearTimeout(id));
-          timeoutsRef.current = [];
-          setMessages([]);
-          setReplies([]);
-          setTyping(false);
-          setContext(null);
-          setStarted(false);
-          sched(() => {
-            setStarted(true);
-            runScene('start', null);
-          }, 300);
-          return;
-        }
-        runScene(sceneId, userMsg);
-      };
-
-      const runScene = (sceneId, userMsg) => {
-        setReplies([]);
-        const sc = SCENES[sceneId];
-        if (!sc) return;
-
-        let delay = 0;
-
-        if (userMsg) {
-          setMessages(prev => [...prev, { from:'user', text:userMsg, time:new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}), id:'u-'+Date.now() }]);
-          delay = 800;
-        }
-
-        sc.messages.forEach((msg, i) => {
-          sched(() => setTyping(true), delay);
-          delay += (msg.delay || 1500);
-          const m = {...msg, id: sceneId+'-'+i+'-'+Date.now()};
-          sched(() => {
-            setTyping(false);
-            setMessages(prev => [...prev, m]);
-          }, delay);
-          delay += 400;
-        });
-
-        if (sc.replies) {
-          sched(() => setReplies(sc.replies), delay + 300);
-        }
-
-        if (sc.context) {
-          sched(() => setContext(sc.context), delay);
-        }
-      };
-
-      const handleStart = () => {
-        setShowWelcome(false);
-        setStarted(true);
-        sched(() => runScene('start', null), 500);
-      };
-
-      const handleReply = (reply) => {
-        playScene(reply.next, reply.label);
-      };
-
-      return (
-        <div style={{minHeight:'100vh',background:'#f0f2f5'}}>
-          {/* Header */}
-          <div style={{borderBottom:'1px solid #e0e0e0',background:'white'}}>
-            <div style={{maxWidth:1200,margin:'0 auto',padding:'12px 24px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <div style={{display:'flex',alignItems:'center',gap:12}}>
-                <div style={{width:32,height:32,borderRadius:8,background:B.teal,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <span style={{color:'white',fontSize:16,fontWeight:800}}>T</span>
-                </div>
+          <div style={{ padding:"0 32px 32px" }}>
+            <div style={{ backgroundColor:"white", borderRadius:"0 12px 12px 12px", padding:24, minHeight:400 }}>
+              {activeView === "topics" && (
                 <div>
-                  <h1 style={{fontWeight:800,fontSize:15,color:B.teal}}>Shift Start Confirmation & Coverage — MVP</h1>
-                  <p style={{fontSize:11,color:'#999'}}>SMS Natural Language · Consequence Validation · Dual-Path Coverage</p>
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>What Employees Are Asking About</div>
+                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Ranked by question volume — last 30 days</div>
+                  </div>
+                  <div style={{ height:280, marginBottom:24 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={barChartData} layout="vertical" margin={{ left:140, right:20 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" tick={{ fontSize:12 }} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize:12 }} width={140} />
+                        <Tooltip formatter={(val) => [val, "Questions"]} />
+                        <Bar dataKey="questions" radius={[0,4,4,0]}>
+                          {barChartData.map((entry, index) => <Cell key={index} fill={entry.gap ? "#BF4B08" : "#6DAEA2"} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ display:"flex", gap:16, marginBottom:20, fontSize:13 }}>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#BF4B08" }} /> Content gap</span>
+                    <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#6DAEA2" }} /> Healthy</span>
+                  </div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                    <thead>
+                      <tr style={{ borderBottom:"2px solid #e5e7eb" }}>
+                        {["TOPIC","QUESTIONS","TREND","RESOLUTION QUALITY"].map((h,i) => (
+                          <th key={h} style={{ textAlign: i===1?"right":i>1?"center":"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:12 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topicData.map((row, i) => (
+                        <tr key={i} style={{ borderBottom:"1px solid #f3f4f6", backgroundColor: row.gap?"#fff7ed":"transparent" }}>
+                          <td style={{ padding:"12px", fontWeight:500, color:"#263D39" }}>{row.gap && <span style={{ color:"#BF4B08", marginRight:6 }}>⚠</span>}{row.topic}</td>
+                          <td style={{ textAlign:"right", padding:"12px", fontWeight:600, color:"#263D39" }}>{row.questions.toLocaleString()}</td>
+                          <td style={{ textAlign:"center", padding:"12px" }}><TrendBadge trend={row.trend} /></td>
+                          <td style={{ textAlign:"center", padding:"12px" }}><QualityBadge score={row.quality} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-              <div style={{display:'flex',alignItems:'center',gap:12}}>
-                <span style={{background:'#f0f0f0',color:'#888',fontSize:11,fontWeight:700,padding:'4px 12px',borderRadius:12}}>SMS Only</span>
-                <button onClick={() => setShowWelcome(true)}
-                  style={{width:28,height:28,borderRadius:'50%',border:'2px solid #ccc',background:'white',cursor:'pointer',fontWeight:700,color:'#999',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}
-                  title="Show instructions">?</button>
-              </div>
+              )}
+
+              {activeView === "gaps" && (
+                <div>
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>Content Gaps</div>
+                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Topics where employees ask frequently but the EA can't answer well</div>
+                  </div>
+                  {gaps.map((gap, i) => (
+                    <div key={i} style={{ border:"1px solid #fed7aa", borderRadius:12, padding:20, marginBottom:16, backgroundColor: i===0?"#fff7ed":"white" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                        <span style={{ backgroundColor:"#BF4B08", color:"white", borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:700 }}>Priority #{gap.priority}</span>
+                        <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{gap.topic}</span>
+                      </div>
+                      <div style={{ fontSize:13, color:"#6b7280", marginBottom:12 }}>{gap.questions.toLocaleString()} questions this month ({gap.trend} vs. last month) · Resolution quality: {gap.quality}%</div>
+                      <div style={{ fontSize:13, color:"#263D39", backgroundColor:"#F5FAF8", padding:12, borderRadius:8, lineHeight:1.5 }}>{gapDetails[gap.topic]}</div>
+                      <div style={{ marginTop:12, backgroundColor:"#fef3c7", borderRadius:8, padding:10, fontSize:12, color:"#92400e", fontWeight:500 }}>
+                        <strong>Employee Impact:</strong> ~{Math.round(gap.questions * (1 - gap.quality / 100))} employees/month not getting answers
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeView === "recommendations" && (
+                <div>
+                  <div style={{ marginBottom:20 }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>What to Fix Next</div>
+                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Prioritized by employee impact (volume × low resolution quality)</div>
+                  </div>
+                  {gaps.map((gap, i) => (
+                    <div key={i} style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:20, marginBottom:16, borderLeft:`4px solid ${i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2"}` }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <span style={{ width:28, height:28, borderRadius:"50%", backgroundColor: i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2", color:"white", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{i+1}</span>
+                          <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{gap.topic}</span>
+                        </div>
+                        <QualityBadge score={gap.quality} />
+                      </div>
+                      <div style={{ backgroundColor:"#F5FAF8", borderRadius:8, padding:16, fontSize:13, lineHeight:1.6 }}>
+                        <div style={{ fontWeight:700, marginBottom:8, color:"#6DAEA2" }}>💡 Recommended Action</div>
+                        <p style={{ margin:"0 0 8px" }}>{recDetails[gap.topic]?.text}</p>
+                        <p style={{ margin:0, fontWeight:600 }}>Expected impact: {recDetails[gap.topic]?.impact}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Main content */}
-          <div style={{maxWidth:1200,margin:'0 auto',padding:24,display:'flex',gap:24,alignItems:'flex-start',justifyContent:'center'}}>
-            <PhoneFrame>
-              <div style={{display:'flex',flexDirection:'column',height:'100%'}}>
-                <SMSBadge/>
-                <div ref={chatRef} className="chat-scroll" style={{flex:1,overflowY:'auto',paddingBottom:8,background:'#fafafa'}}>
-                  {!started && !showWelcome && (
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',textAlign:'center',padding:'0 32px'}}>
-                      <p style={{fontSize:14,color:'#999'}}>Starting conversation...</p>
-                    </div>
-                  )}
-                  {messages.length > 0 && (
-                    <div style={{display:'flex',justifyContent:'center',padding:'8px 0'}}>
-                      <span style={{background:'#e8f5e9',color:'#2e7d32',fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:12}}>
-                        14 employees auto-confirmed via badge data
-                      </span>
-                    </div>
-                  )}
-                  {messages.map(msg => <ChatBubble key={msg.id} msg={msg}/>)}
-                  {typing && <TypingDots/>}
-                </div>
-                {replies.length > 0 && <ReplySuggestions replies={replies} onReply={handleReply}/>}
+          <div style={{ padding:"0 32px 32px" }}>
+            <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
+              <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Question Volume Trend</div>
+              <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>Total questions vs. resolved — last 6 months</div>
+              <div style={{ height:220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendDataP1}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize:12 }} />
+                    <YAxis tick={{ fontSize:12 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="total" stroke="#263D39" strokeWidth={2} name="Total Questions" dot={{ r:4 }} />
+                    <Line type="monotone" dataKey="resolved" stroke="#6DAEA2" strokeWidth={2} name="Resolved" dot={{ r:4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-            </PhoneFrame>
-
-            <ContextPanel context={context}/>
+            </div>
           </div>
-
-          {showWelcome && <WelcomeOverlay onStart={handleStart}/>}
+          <div style={{ textAlign:"center", padding:"16px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TIP v1 — Content Insights Dashboard · TeamSense Research Prototype</div>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    /* ============================================================
+       PROTOTYPE 2: CONTENT IMPROVEMENT IMPACT
+       ============================================================ */
+    const contentUpdates = [
+      { id:1, topic:"PTO / Time Off Policy", updatedBy:"Stacy M.", updatedDate:"Jan 15, 2026", before:{questions:847,quality:42,fallbackRate:58}, after:{questions:518,quality:89,fallbackRate:11}, status:"improved", details:"Added site-specific accrual rules for Aurora, Newark, and Irving. Added blackout date calendar. Added rollover policy FAQ.",
+        trendData:[{week:"Dec 23",questions:210,quality:41},{week:"Dec 30",questions:225,quality:40},{week:"Jan 6",questions:198,quality:43},{week:"Jan 13",questions:215,quality:42},{week:"Jan 20",questions:156,quality:72},{week:"Jan 27",questions:138,quality:84},{week:"Feb 3",questions:125,quality:88},{week:"Feb 10",questions:130,quality:89},{week:"Feb 17",questions:127,quality:89}], refLine:"Jan 13" },
+      { id:2, topic:"Safety Protocols", updatedBy:"Marcus J.", updatedDate:"Feb 3, 2026", before:{questions:412,quality:34,fallbackRate:66}, after:{questions:380,quality:61,fallbackRate:39}, status:"improving", details:"Updated PPE requirements for cold storage. Added new chemical handling procedures. Still missing: forklift certification renewal process.",
+        trendData:[{week:"Jan 6",questions:95,quality:33},{week:"Jan 13",questions:108,quality:35},{week:"Jan 20",questions:112,quality:34},{week:"Jan 27",questions:98,quality:33},{week:"Feb 3",questions:102,quality:35},{week:"Feb 10",questions:94,quality:55},{week:"Feb 17",questions:88,quality:61}], refLine:"Feb 3" },
+      { id:3, topic:"Benefits & Insurance", updatedBy:null, updatedDate:null, before:{questions:541,quality:45,fallbackRate:55}, after:null, status:"no_update", details:"No content update made. Gap identified 45 days ago. Life event and eligibility change content still missing.",
+        trendData:[{week:"Jan 6",questions:130,quality:46},{week:"Jan 13",questions:138,quality:44},{week:"Jan 20",questions:142,quality:45},{week:"Jan 27",questions:135,quality:44},{week:"Feb 3",questions:148,quality:43},{week:"Feb 10",questions:140,quality:45},{week:"Feb 17",questions:145,quality:45}], refLine:null },
+    ];
+
+    const statusColors = {
+      improved: { bg:"#f0fdf4", border:"#bbf7d0", text:"#16a34a", label:"✓ Significant Improvement" },
+      improving: { bg:"#fefce8", border:"#fde68a", text:"#92400e", label:"↗ Improving — Monitor" },
+      no_update: { bg:"#fef2f2", border:"#fecaca", text:"#991b1b", label:"⚠ No Action Taken" },
+    };
+
+    const ImpactCard = ({ label, before, after, unit, inverse }) => {
+      if (after === null) return (
+        <div style={{ flex:1, backgroundColor:"#f9fafb", borderRadius:8, padding:16, textAlign:"center" }}>
+          <div style={{ fontSize:12, color:"#9ca3af", marginBottom:4, fontWeight:500 }}>{label}</div>
+          <div style={{ fontSize:24, fontWeight:700, color:"#9ca3af" }}>—</div>
+          <div style={{ fontSize:11, color:"#9ca3af" }}>No update yet</div>
+        </div>
+      );
+      const improved = inverse ? after < before : after > before;
+      const changePercent = Math.round(Math.abs(after - before) / before * 100);
+      return (
+        <div style={{ flex:1, backgroundColor: improved?"#f0fdf4":"#fff7ed", borderRadius:8, padding:16, textAlign:"center" }}>
+          <div style={{ fontSize:12, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{label}</div>
+          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:12, marginBottom:4 }}>
+            <span style={{ fontSize:18, color:"#9ca3af", textDecoration:"line-through" }}>{before}{unit}</span>
+            <span style={{ fontSize:14, color:"#6b7280" }}>→</span>
+            <span style={{ fontSize:24, fontWeight:700, color: improved?"#16a34a":"#BF4B08" }}>{after}{unit}</span>
+          </div>
+          <div style={{ fontSize:12, fontWeight:600, color: improved?"#16a34a":"#BF4B08" }}>{improved?"↓":"↑"} {changePercent}% {improved?"improvement":"regression"}</div>
+        </div>
+      );
+    };
+
+    function ContentImpact() {
+      const [sel, setSel] = useState(0);
+      const cur = contentUpdates[sel];
+      const st = statusColors[cur.status];
+
+      return (
+        <div style={{ backgroundColor:"#F5FAF8", minHeight:"100vh" }}>
+          <div style={{ backgroundColor:"#263D39", color:"white", padding:"20px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13, opacity:0.7, marginBottom:4, letterSpacing:0.5 }}>TEAMSENSE INSIGHTS</div>
+              <div style={{ fontSize:24, fontWeight:700 }}>Content Improvement Impact</div>
+            </div>
+            <div style={{ backgroundColor:"rgba(255,255,255,0.15)", borderRadius:8, padding:"8px 16px", fontSize:13, fontWeight:500 }}>All Sites · Last 90 Days</div>
+          </div>
+
+          <div style={{ margin:"24px 32px 0", backgroundColor:"white", borderRadius:12, padding:20, display:"flex", gap:24, alignItems:"center", border:"1px solid #e5e7eb" }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, color:"#6b7280", fontWeight:500, marginBottom:2 }}>Content Updates This Quarter</div>
+              <div style={{ fontSize:32, fontWeight:700, color:"#263D39" }}>2 <span style={{ fontSize:16, fontWeight:400, color:"#6b7280" }}>of 4 gaps addressed</span></div>
+            </div>
+            <div style={{ width:1, height:48, backgroundColor:"#e5e7eb" }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, color:"#6b7280", fontWeight:500, marginBottom:2 }}>Questions Reduced</div>
+              <div style={{ fontSize:32, fontWeight:700, color:"#16a34a" }}>-361 <span style={{ fontSize:16, fontWeight:400, color:"#6b7280" }}>/month</span></div>
+            </div>
+            <div style={{ width:1, height:48, backgroundColor:"#e5e7eb" }} />
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, color:"#6b7280", fontWeight:500, marginBottom:2 }}>HR Time Saved (est.)</div>
+              <div style={{ fontSize:32, fontWeight:700, color:"#6DAEA2" }}>~18 hrs <span style={{ fontSize:16, fontWeight:400, color:"#6b7280" }}>/month</span></div>
+            </div>
+          </div>
+
+          <div style={{ padding:"24px 32px 0", display:"flex", gap:12 }}>
+            {contentUpdates.map((u, i) => (
+              <button key={u.id} onClick={() => setSel(i)} style={{ flex:1, padding:16, borderRadius:12, cursor:"pointer", border: sel===i?"2px solid #263D39":"1px solid #e5e7eb", backgroundColor: sel===i?"white":"#f9fafb", textAlign:"left" }}>
+                <div style={{ fontSize:14, fontWeight:700, color:"#263D39", marginBottom:4 }}>{u.topic}</div>
+                <div style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:10, display:"inline-block", backgroundColor:statusColors[u.status].bg, color:statusColors[u.status].text, border:`1px solid ${statusColors[u.status].border}` }}>{statusColors[u.status].label}</div>
+                {u.updatedDate && <div style={{ fontSize:11, color:"#9ca3af", marginTop:6 }}>Updated {u.updatedDate} by {u.updatedBy}</div>}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ padding:"24px 32px" }}>
+            <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, padding:16, borderRadius:8, backgroundColor:st.bg, border:`1px solid ${st.border}` }}>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>{cur.topic}</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>{cur.details}</div>
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:st.text, backgroundColor:"white", padding:"6px 14px", borderRadius:8, border:`1px solid ${st.border}`, whiteSpace:"nowrap" }}>{st.label}</div>
+              </div>
+
+              <div style={{ display:"flex", gap:16, marginBottom:24 }}>
+                <ImpactCard label="Questions / Month" before={cur.before.questions} after={cur.after?.questions ?? null} unit="" inverse={true} />
+                <ImpactCard label="Resolution Quality" before={cur.before.quality} after={cur.after?.quality ?? null} unit="%" inverse={false} />
+                <ImpactCard label="Fallback-to-HR Rate" before={cur.before.fallbackRate} after={cur.after?.fallbackRate ?? null} unit="%" inverse={true} />
+              </div>
+
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#263D39", marginBottom:4 }}>Weekly Trend</div>
+                <div style={{ fontSize:12, color:"#6b7280", marginBottom:16 }}>{cur.updatedDate ? `Content updated on ${cur.updatedDate} (dashed line)` : "No content update — flat trend"}</div>
+                <div style={{ height:220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={cur.trendData}>
+                      <defs><linearGradient id="qg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6DAEA2" stopOpacity={0.3} /><stop offset="95%" stopColor="#6DAEA2" stopOpacity={0} /></linearGradient></defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="week" tick={{ fontSize:11 }} />
+                      <YAxis tick={{ fontSize:11 }} domain={[0, 100]} />
+                      <Tooltip />
+                      {cur.refLine && <ReferenceLine x={cur.refLine} stroke="#F6B725" strokeWidth={2} strokeDasharray="5 5" label={{ value:"Content Updated", position:"top", fontSize:11, fill:"#92400e" }} />}
+                      <Area type="monotone" dataKey="quality" stroke="#6DAEA2" strokeWidth={2} fill="url(#qg)" name="Resolution Quality %" dot={{ r:3 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {cur.status === "no_update" && (
+                <div style={{ backgroundColor:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:16, marginTop:16 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#991b1b", marginBottom:4 }}>⚠ This gap was identified 45 days ago</div>
+                  <div style={{ fontSize:13, color:"#7f1d1d", lineHeight:1.5 }}>~298 employees per month are not getting the answers they need about Benefits & Insurance.</div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div style={{ textAlign:"center", padding:"8px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TIP v1.5 — Content Improvement Impact · TeamSense Research Prototype</div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       PROTOTYPE 3: UNIFIED DASHBOARD
+       ============================================================ */
+    const attendanceTrend = [
+      { week:"Jan 6", calloffs:42, pto:28, ncns:8, tardy:15, eaQuestions:890 },
+      { week:"Jan 13", calloffs:38, pto:31, ncns:6, tardy:12, eaQuestions:920 },
+      { week:"Jan 20", calloffs:51, pto:45, ncns:11, tardy:18, eaQuestions:1150 },
+      { week:"Jan 27", calloffs:44, pto:35, ncns:7, tardy:14, eaQuestions:980 },
+      { week:"Feb 3", calloffs:39, pto:32, ncns:5, tardy:11, eaQuestions:940 },
+      { week:"Feb 10", calloffs:47, pto:52, ncns:9, tardy:16, eaQuestions:1180 },
+      { week:"Feb 17", calloffs:43, pto:38, ncns:7, tardy:13, eaQuestions:1020 },
+    ];
+
+    const dayOfWeek = [
+      { day:"Mon", absences:68 },{ day:"Tue", absences:42 },{ day:"Wed", absences:35 },
+      { day:"Thu", absences:38 },{ day:"Fri", absences:52 },{ day:"Sat", absences:24 },{ day:"Sun", absences:18 },
+    ];
+
+    const shiftBreakdown = [
+      { shift:"1st Shift (6a-2p)", absences:89, absenceRate:"4.2%", eaUsage:1840, topTopic:"PTO Policy", pct:"28%" },
+      { shift:"2nd Shift (2p-10p)", absences:112, absenceRate:"5.8%", eaUsage:1620, topTopic:"Shift Schedule", pct:"34%" },
+      { shift:"3rd Shift (10p-6a)", absences:63, absenceRate:"6.1%", eaUsage:823, topTopic:"Safety Protocols", pct:"41%" },
+    ];
+
+    const correlationInsights = [
+      { icon:"🔗", title:"PTO questions and PTO absences moving together", detail:"Week of Feb 10: PTO questions spiked 42% and PTO call-offs increased 49%. Employees may be researching policy before requesting time off.", action:"Review PTO content — are employees finding what they need, or calling off because they can't figure out the process?", confidence:"Strong correlation (r=0.84 over 8 weeks)" },
+      { icon:"📊", title:"Monday EA usage predicts Monday absences", detail:"Monday morning EA questions (6am-8am) correlate with same-day call-off volume. When pre-shift EA questions exceed 60, call-offs that day are 35% higher than average.", action:"Potential leading indicator — could enable proactive staffing adjustments.", confidence:"Moderate correlation (r=0.71 over 12 weeks)" },
+      { icon:"⚠️", title:"3rd shift safety questions → no matching content", detail:"3rd shift employees ask about safety protocols 3.2x more than other shifts, but resolution quality for safety is only 34%. 3rd shift also has the highest absence rate (6.1%).", action:"Update safety content with 3rd-shift-specific procedures. Possible connection between content frustration and absenteeism.", confidence:"Exploratory — needs more data" },
+    ];
+
+    const roiMetrics = [
+      { metric:"Absenteeism Rate", before:"5.8%", current:"4.9%", change:"-15.5%", dir:"improved" },
+      { metric:"NCNS Rate", before:"1.4%", current:"0.8%", change:"-43%", dir:"improved" },
+      { metric:"Avg Time to Notification", before:"47 min", current:"8 min", change:"-83%", dir:"improved" },
+      { metric:"HR Questions via EA (self-served)", before:"0", current:"4,283/mo", change:"New", dir:"new" },
+    ];
+
+    function UnifiedDashboard() {
+      const [sec, setSec] = useState("overview");
+
+      return (
+        <div style={{ backgroundColor:"#F5FAF8", minHeight:"100vh" }}>
+          <div style={{ backgroundColor:"#263D39", color:"white", padding:"20px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13, opacity:0.7, marginBottom:4, letterSpacing:0.5 }}>TEAMSENSE INSIGHTS</div>
+              <div style={{ fontSize:24, fontWeight:700 }}>HelloFresh — Workforce Analytics</div>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              {["All Sites","Aurora, CO","Newark, NJ","Irving, TX"].map(s => (
+                <button key={s} style={{ padding:"6px 14px", borderRadius:6, border:"1px solid rgba(255,255,255,0.3)", backgroundColor: s==="All Sites"?"rgba(255,255,255,0.2)":"transparent", color:"white", cursor:"pointer", fontSize:13, fontWeight:500 }}>{s}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ backgroundColor:"white", padding:"12px 32px", borderBottom:"1px solid #e5e7eb", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, color:"#6b7280", fontWeight:500 }}>Filters:</span>
+            {["Last 30 Days","All Shifts","All Managers","All Departments"].map(f => (
+              <button key={f} style={{ padding:"5px 12px", borderRadius:6, border:"1px solid #d1d5db", backgroundColor:"white", fontSize:13, cursor:"pointer", color:"#374151" }}>{f} ▾</button>
+            ))}
+            <div style={{ flex:1 }} />
+            <button style={{ padding:"6px 16px", borderRadius:6, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:13, fontWeight:600, cursor:"pointer" }}>Export Report</button>
+          </div>
+
+          <div style={{ padding:"16px 32px 0", display:"flex", gap:4, borderBottom:"1px solid #e5e7eb" }}>
+            {[{id:"overview",label:"Overview"},{id:"attendance",label:"Attendance"},{id:"connections",label:"Connected Insights"},{id:"roi",label:"ROI"}].map(tab => (
+              <button key={tab.id} onClick={() => setSec(tab.id)} style={{ padding:"10px 20px", border:"none", cursor:"pointer", fontSize:14, fontWeight:600, backgroundColor:"transparent", color: sec===tab.id?"#263D39":"#6b7280", borderBottom: sec===tab.id?"3px solid #F6B725":"3px solid transparent", marginBottom:-1 }}>
+                {tab.label}
+                {tab.id==="connections" && <span style={{ marginLeft:6, backgroundColor:"#F6B725", color:"#263D39", borderRadius:10, padding:"1px 7px", fontSize:10, fontWeight:700 }}>NEW</span>}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ padding:"24px 32px" }}>
+            {sec === "overview" && (
+              <div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16, marginBottom:24 }}>
+                  {[
+                    { label:"Total Absences", value:"264", sub:"Last 30 days", color:"#263D39" },
+                    { label:"Absence Rate", value:"4.9%", sub:"↓ 0.3% from last month", color:"#16a34a" },
+                    { label:"EA Questions", value:"4,283", sub:"↑ 12% from last month", color:"#263D39" },
+                    { label:"Content Gaps", value:"4", sub:"Topics need attention", color:"#BF4B08" },
+                  ].map((m,i) => (
+                    <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:20, border:"1px solid #e5e7eb" }}>
+                      <div style={{ fontSize:13, color:"#6b7280", fontWeight:500, marginBottom:4 }}>{m.label}</div>
+                      <div style={{ fontSize:28, fontWeight:700, color:m.color }}>{m.value}</div>
+                      <div style={{ fontSize:12, color:"#6DAEA2", marginTop:4, fontWeight:500 }}>{m.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Attendance & EA Activity — Weekly</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>See how employee questions and absences move together</div>
+                  <div style={{ height:280 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={attendanceTrend}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="week" tick={{ fontSize:11 }} />
+                        <YAxis yAxisId="left" tick={{ fontSize:11 }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize:11 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Line yAxisId="left" type="monotone" dataKey="calloffs" stroke="#BF4B08" strokeWidth={2} name="Call-offs" dot={{ r:3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="pto" stroke="#F6B725" strokeWidth={2} name="PTO" dot={{ r:3 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="ncns" stroke="#991b1b" strokeWidth={2} name="NCNS" dot={{ r:3 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="eaQuestions" stroke="#6DAEA2" strokeWidth={2} strokeDasharray="5 5" name="EA Questions" dot={{ r:3 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>By Shift</div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                    <thead><tr style={{ borderBottom:"2px solid #e5e7eb" }}>
+                      {["SHIFT","ABSENCES","ABSENCE RATE","EA QUESTIONS","TOP EA TOPIC"].map(h => <th key={h} style={{ textAlign:"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:12 }}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {shiftBreakdown.map((r,i) => (
+                        <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                          <td style={{ padding:12, fontWeight:600, color:"#263D39" }}>{r.shift}</td>
+                          <td style={{ padding:12 }}>{r.absences}</td>
+                          <td style={{ padding:12 }}><span style={{ color: parseFloat(r.absenceRate)>5.5?"#BF4B08":"#263D39", fontWeight:600 }}>{r.absenceRate}</span></td>
+                          <td style={{ padding:12 }}>{r.eaUsage.toLocaleString()}</td>
+                          <td style={{ padding:12 }}><span style={{ color:"#6DAEA2", fontWeight:500 }}>{r.topTopic}</span> <span style={{ color:"#9ca3af", fontSize:12 }}>({r.pct})</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {sec === "attendance" && (
+              <div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Absence Breakdown — Last 30 Days</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>By type, weekly</div>
+                  <div style={{ height:280 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={attendanceTrend}>
+                        <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="week" tick={{ fontSize:11 }} /><YAxis tick={{ fontSize:11 }} /><Tooltip /><Legend />
+                        <Bar dataKey="calloffs" stackId="a" fill="#BF4B08" name="Call-offs" />
+                        <Bar dataKey="pto" stackId="a" fill="#F6B725" name="PTO" />
+                        <Bar dataKey="ncns" stackId="a" fill="#991b1b" name="NCNS" />
+                        <Bar dataKey="tardy" stackId="a" fill="#6DAEA2" name="Tardy" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>Day-of-Week Pattern</div>
+                  <div style={{ height:220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dayOfWeek}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{ fontSize:12 }} /><YAxis tick={{ fontSize:12 }} /><Tooltip /><Bar dataKey="absences" fill="#263D39" radius={[4,4,0,0]} name="Absences" /></BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ marginTop:12, padding:12, backgroundColor:"#fefce8", borderRadius:8, fontSize:13, color:"#92400e" }}>💡 <strong>Monday absences are 63% higher than mid-week average.</strong> Could indicate scheduling satisfaction issues.</div>
+                </div>
+              </div>
+            )}
+
+            {sec === "connections" && (
+              <div>
+                <div style={{ backgroundColor:"#fefce8", border:"1px solid #fde68a", borderRadius:12, padding:16, marginBottom:24, display:"flex", alignItems:"center", gap:12 }}>
+                  <span style={{ fontSize:20 }}>✨</span>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>Connected Insights</div>
+                    <div style={{ fontSize:13, color:"#92400e" }}>Patterns found by looking at EA and Attendance data together — things neither dataset shows alone.</div>
+                  </div>
+                </div>
+                {correlationInsights.map((ins,i) => (
+                  <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:16, borderLeft:`4px solid ${i===0?"#F6B725":i===1?"#6DAEA2":"#BF4B08"}` }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                      <span style={{ fontSize:18 }}>{ins.icon}</span>
+                      <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{ins.title}</span>
+                    </div>
+                    <div style={{ fontSize:14, color:"#374151", lineHeight:1.6, marginBottom:12 }}>{ins.detail}</div>
+                    <div style={{ backgroundColor:"#F5FAF8", borderRadius:8, padding:12, fontSize:13, lineHeight:1.5, marginBottom:8 }}>
+                      <span style={{ fontWeight:700, color:"#6DAEA2" }}>💡 What this means: </span>
+                      <span style={{ color:"#263D39" }}>{ins.action}</span>
+                    </div>
+                    <div style={{ fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>{ins.confidence}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sec === "roi" && (
+              <div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ fontSize:18, fontWeight:700, color:"#263D39", marginBottom:4 }}>TeamSense ROI — HelloFresh</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginBottom:20 }}>Before TeamSense (baseline) vs. current</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(2, 1fr)", gap:16 }}>
+                    {roiMetrics.map((m,i) => (
+                      <div key={i} style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:20, backgroundColor: m.dir==="new"?"#F5FAF8":"white" }}>
+                        <div style={{ fontSize:13, color:"#6b7280", fontWeight:500, marginBottom:8 }}>{m.metric}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:4 }}>
+                          {m.dir!=="new" && <><span style={{ fontSize:20, color:"#9ca3af", textDecoration:"line-through" }}>{m.before}</span><span style={{ color:"#6b7280" }}>→</span></>}
+                          <span style={{ fontSize:28, fontWeight:700, color: m.dir==="new"?"#6DAEA2":"#16a34a" }}>{m.current}</span>
+                        </div>
+                        <div style={{ fontSize:13, fontWeight:600, color: m.dir==="new"?"#6DAEA2":"#16a34a" }}>{m.dir==="new"?"New capability":`${m.change} improvement`}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"2px solid #F6B725" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:8 }}>📋 Ready for Your Next QBR</div>
+                  <div style={{ fontSize:14, color:"#374151", lineHeight:1.6, marginBottom:16 }}>Export a formatted report with these metrics alongside attendance trends and content insights. No CSM needed.</div>
+                  <button style={{ padding:"10px 24px", borderRadius:8, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:14, fontWeight:700, cursor:"pointer" }}>Export QBR Report</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ textAlign:"center", padding:"8px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TIP v1 — Unified Workforce Analytics · TeamSense Research Prototype</div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       PROTOTYPE 4: PRD-FAITHFUL ATTENDANCE ANALYTICS
+       Capabilities #1, #3, #4, #5, #6, #7
+       ============================================================ */
+    const weeklyTrendP4 = [
+      { week:"Dec 1", calloffs:38, pto:24, ncns:7, tardy:11 },
+      { week:"Dec 8", calloffs:41, pto:22, ncns:5, tardy:13 },
+      { week:"Dec 15", calloffs:35, pto:42, ncns:6, tardy:10 },
+      { week:"Dec 22", calloffs:28, pto:58, ncns:4, tardy:8 },
+      { week:"Dec 29", calloffs:32, pto:51, ncns:9, tardy:12 },
+      { week:"Jan 5", calloffs:48, pto:26, ncns:11, tardy:16 },
+      { week:"Jan 12", calloffs:42, pto:28, ncns:8, tardy:15 },
+      { week:"Jan 19", calloffs:51, pto:45, ncns:11, tardy:18 },
+      { week:"Jan 26", calloffs:44, pto:35, ncns:7, tardy:14 },
+      { week:"Feb 2", calloffs:39, pto:32, ncns:5, tardy:11 },
+      { week:"Feb 9", calloffs:47, pto:52, ncns:9, tardy:16 },
+      { week:"Feb 16", calloffs:43, pto:38, ncns:7, tardy:13 },
+    ];
+    const dayOfWeekP4 = [
+      { day:"Mon", absences:68 },{ day:"Tue", absences:42 },{ day:"Wed", absences:35 },
+      { day:"Thu", absences:38 },{ day:"Fri", absences:52 },{ day:"Sat", absences:24 },{ day:"Sun", absences:18 },
+    ];
+    const shiftDataP4 = [
+      { shift:"1st Shift (6a–2p)", headcount:2120, absences:89, rate:"4.2%", ncns:12, calloffs:48, pto:29, trend:"↓ 0.3%", color:"#6DAEA2" },
+      { shift:"2nd Shift (2p–10p)", headcount:1930, absences:112, rate:"5.8%", ncns:18, calloffs:61, pto:33, trend:"↑ 0.4%", color:"#F6B725" },
+      { shift:"3rd Shift (10p–6a)", headcount:1032, absences:63, rate:"6.1%", ncns:14, calloffs:35, pto:14, trend:"↑ 0.8%", color:"#BF4B08" },
+    ];
+    const managerDataP4 = [
+      { name:"Maria Gonzalez", division:"Aurora, CO", shift:"1st", headcount:42, absences:6, rate:"3.1%", ncns:0, trend:"↓", flag:null },
+      { name:"James Mitchell", division:"Aurora, CO", shift:"2nd", headcount:38, absences:12, rate:"6.8%", ncns:3, trend:"↑", flag:"high_ncns" },
+      { name:"Rosa Hernandez", division:"Newark, NJ", shift:"1st", headcount:45, absences:5, rate:"2.4%", ncns:0, trend:"↓", flag:null },
+      { name:"DeShawn Williams", division:"Newark, NJ", shift:"3rd", headcount:31, absences:9, rate:"6.2%", ncns:4, trend:"↑", flag:"high_ncns" },
+      { name:"Tran Nguyen", division:"Irving, TX", shift:"2nd", headcount:40, absences:14, rate:"7.5%", ncns:5, trend:"↑", flag:"high_rate" },
+      { name:"Sarah Chen", division:"Aurora, CO", shift:"1st", headcount:44, absences:4, rate:"2.0%", ncns:0, trend:"↓", flag:null },
+      { name:"Marcus Johnson", division:"Irving, TX", shift:"3rd", headcount:28, absences:8, rate:"6.1%", ncns:3, trend:"→", flag:"high_ncns" },
+      { name:"Angela Davis", division:"Newark, NJ", shift:"2nd", headcount:36, absences:10, rate:"6.0%", ncns:2, trend:"↑", flag:null },
+    ];
+    const divCompP4 = [
+      { division:"Aurora, CO", headcount:1820, rate:"4.5%", ncnsRate:"0.6%", avgNotify:"7 min", topDay:"Monday", change:"↓ 0.4%" },
+      { division:"Newark, NJ", headcount:1680, rate:"5.2%", ncnsRate:"1.1%", avgNotify:"9 min", topDay:"Monday", change:"↑ 0.2%" },
+      { division:"Irving, TX", headcount:1582, rate:"5.6%", ncnsRate:"1.4%", avgNotify:"11 min", topDay:"Friday", change:"↑ 0.5%" },
+    ];
+    const absTypePie = [
+      { name:"Call-offs", value:488, color:"#BF4B08" },
+      { name:"PTO", value:453, color:"#F6B725" },
+      { name:"NCNS", value:89, color:"#991b1b" },
+      { name:"Tardy", value:157, color:"#6DAEA2" },
+    ];
+    const roiBaseP4 = [
+      { metric:"Absenteeism Rate", before:"5.8%", current:"4.9%", change:"-15.5%", method:"First 30 days vs. most recent 30 days" },
+      { metric:"NCNS Rate", before:"1.4%", current:"0.8%", change:"-42.9%", method:"First 30 days vs. most recent 30 days" },
+      { metric:"Avg Time to Notification", before:"47 min", current:"8 min", change:"-83.0%", method:"Pre-TeamSense baseline vs. current" },
+      { metric:"Monthly Trend", before:"Flat", current:"Declining", change:"Improving", method:"12-week linear trend" },
+    ];
+    const monthlyTrendP4 = [
+      { month:"Sep", rate:5.8 },{ month:"Oct", rate:5.5 },{ month:"Nov", rate:5.3 },
+      { month:"Dec", rate:5.1 },{ month:"Jan", rate:5.0 },{ month:"Feb", rate:4.9 },
+    ];
+
+    function AttendanceAnalytics() {
+      const [tab4, setTab4] = useState("overview");
+      const [selDiv, setSelDiv] = useState("All Sites");
+      const [selShift, setSelShift] = useState("All Shifts");
+      const [selMgr, setSelMgr] = useState("All Managers");
+      const [dateRng, setDateRng] = useState("Last 30 Days");
+      const [showExport, setShowExport] = useState(false);
+
+      const divs = ["All Sites","Aurora, CO","Newark, NJ","Irving, TX"];
+      const shfts = ["All Shifts","1st Shift","2nd Shift","3rd Shift"];
+      const mgrs = ["All Managers",...managerDataP4.map(m=>m.name)];
+      const dates = ["Last 7 Days","Last 30 Days","Last 90 Days","Custom Range"];
+
+      const filtMgrs = managerDataP4.filter(m => {
+        if (selDiv !== "All Sites" && m.division !== selDiv) return false;
+        if (selShift !== "All Shifts" && !m.shift.startsWith(selShift.charAt(0))) return false;
+        return true;
+      });
+
+      const selStyle = (active) => ({
+        padding:"5px 12px", borderRadius:6, fontSize:13, cursor:"pointer", color:"#374151",
+        fontFamily:"'Urbanist', system-ui, sans-serif",
+        border: active ? "2px solid #6DAEA2" : "1px solid #d1d5db",
+        backgroundColor: active ? "#f0fdf4" : "white",
+      });
+
+      const p4tabs = [{id:"overview",label:"Overview"},{id:"patterns",label:"Patterns & Breakdown"},{id:"managers",label:"Manager View"},{id:"divisions",label:"Division Comparison"},{id:"roi",label:"ROI Baseline"}];
+
+      return (
+        <div style={{ backgroundColor:"#F5FAF8", minHeight:"100vh" }}>
+          {/* Header */}
+          <div style={{ backgroundColor:"#263D39", color:"white", padding:"20px 32px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13, opacity:0.7, marginBottom:4, letterSpacing:0.5 }}>TEAMSENSE INSIGHTS</div>
+              <div style={{ fontSize:24, fontWeight:700 }}>Attendance Analytics</div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ backgroundColor:"rgba(255,255,255,0.1)", borderRadius:8, padding:"6px 12px", fontSize:12 }}>
+                <span style={{ color:"#6DAEA2", fontWeight:700 }}>●</span> Last updated: 12 min ago
+              </div>
+              <div style={{ backgroundColor:"rgba(109,174,162,0.2)", border:"1px solid rgba(109,174,162,0.4)", borderRadius:8, padding:"6px 12px", fontSize:12, color:"#6DAEA2", fontWeight:600 }}>Near Real-Time</div>
+            </div>
+          </div>
+
+          {/* TEDS Filter Bar */}
+          <div style={{ backgroundColor:"white", padding:"12px 32px", borderBottom:"1px solid #e5e7eb", display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, color:"#6b7280", fontWeight:600 }}>TEDS Filters:</span>
+            <select value={selDiv} onChange={e=>setSelDiv(e.target.value)} style={selStyle(selDiv!=="All Sites")}>{divs.map(d=><option key={d}>{d}</option>)}</select>
+            <select value={selShift} onChange={e=>setSelShift(e.target.value)} style={selStyle(selShift!=="All Shifts")}>{shfts.map(s=><option key={s}>{s}</option>)}</select>
+            <select value={selMgr} onChange={e=>setSelMgr(e.target.value)} style={selStyle(selMgr!=="All Managers")}>{mgrs.map(m=><option key={m}>{m}</option>)}</select>
+            <select value={dateRng} onChange={e=>setDateRng(e.target.value)} style={selStyle(false)}>{dates.map(d=><option key={d}>{d}</option>)}</select>
+            <button style={{ padding:"5px 12px", borderRadius:6, border:"1px solid #d1d5db", backgroundColor:"white", fontSize:13, cursor:"pointer", color:"#374151" }}>Status Type ▾</button>
+            <div style={{ flex:1 }} />
+            {(selDiv!=="All Sites"||selShift!=="All Shifts"||selMgr!=="All Managers") && (
+              <button onClick={()=>{setSelDiv("All Sites");setSelShift("All Shifts");setSelMgr("All Managers");}} style={{ padding:"5px 12px", borderRadius:6, border:"none", backgroundColor:"#fef2f2", color:"#991b1b", fontSize:12, cursor:"pointer", fontWeight:600 }}>✕ Clear Filters</button>
+            )}
+            <button onClick={()=>setShowExport(true)} style={{ padding:"6px 16px", borderRadius:6, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:13, fontWeight:600, cursor:"pointer" }}>Export Report</button>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ padding:"16px 32px 0", display:"flex", gap:4, borderBottom:"1px solid #e5e7eb" }}>
+            {p4tabs.map(t=>(
+              <button key={t.id} onClick={()=>setTab4(t.id)} style={{ padding:"10px 20px", border:"none", cursor:"pointer", fontSize:14, fontWeight:600, backgroundColor:"transparent", color:tab4===t.id?"#263D39":"#6b7280", borderBottom:tab4===t.id?"3px solid #F6B725":"3px solid transparent", marginBottom:-1 }}>{t.label}</button>
+            ))}
+          </div>
+
+          <div style={{ padding:"24px 32px" }}>
+            {/* OVERVIEW */}
+            {tab4==="overview" && (
+              <div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:16, marginBottom:24 }}>
+                  {[
+                    {label:"Total Absences",value:"1,187",sub:"Last 30 days",color:"#263D39"},
+                    {label:"Absence Rate",value:"4.9%",sub:"↓ 0.3% from last month",color:"#16a34a"},
+                    {label:"NCNS Rate",value:"0.8%",sub:"↓ 0.2% from last month",color:"#16a34a"},
+                    {label:"Avg Notification",value:"8 min",sub:"Target: <15 min",color:"#263D39"},
+                    {label:"Peak Day",value:"Monday",sub:"63% above avg",color:"#BF4B08"},
+                  ].map((c,i)=>(
+                    <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:16, border:"1px solid #e5e7eb" }}>
+                      <div style={{ fontSize:12, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{c.label}</div>
+                      <div style={{ fontSize:26, fontWeight:700, color:c.color }}>{c.value}</div>
+                      <div style={{ fontSize:11, color:"#6DAEA2", marginTop:4, fontWeight:500 }}>{c.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                    <div><div style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>Absence Trend — Weekly</div><div style={{ fontSize:13, color:"#6b7280" }}>By type · last 12 weeks</div></div>
+                    <div style={{ fontSize:12, color:"#9ca3af" }}>Data refreshes every ~1 hour</div>
+                  </div>
+                  <div style={{ height:300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyTrendP4}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="week" tick={{fontSize:11}} /><YAxis tick={{fontSize:11}} /><Tooltip /><Legend />
+                        <Bar dataKey="calloffs" stackId="a" fill="#BF4B08" name="Call-offs" /><Bar dataKey="pto" stackId="a" fill="#F6B725" name="PTO" /><Bar dataKey="ncns" stackId="a" fill="#991b1b" name="NCNS" /><Bar dataKey="tardy" stackId="a" fill="#6DAEA2" name="Tardy" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Absence Rate — Monthly Trend</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>6-month view · used for ROI baseline</div>
+                  <div style={{ height:200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={monthlyTrendP4}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="month" tick={{fontSize:12}} /><YAxis tick={{fontSize:12}} domain={[4,6.5]} tickFormatter={v=>`${v}%`} /><Tooltip formatter={v=>[`${v}%`,"Absence Rate"]} /><Line type="monotone" dataKey="rate" stroke="#263D39" strokeWidth={2} dot={{r:4,fill:"#263D39"}} /></LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ marginTop:12, padding:12, backgroundColor:"#f0fdf4", borderRadius:8, fontSize:13, color:"#16a34a", fontWeight:500 }}>Trending down: -0.9 percentage points over 6 months (5.8% → 4.9%)</div>
+                </div>
+              </div>
+            )}
+
+            {/* PATTERNS */}
+            {tab4==="patterns" && (
+              <div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24, marginBottom:24 }}>
+                  <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                    <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>Day-of-Week Pattern</div>
+                    <div style={{ height:240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={dayOfWeekP4}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" tick={{fontSize:12}} /><YAxis tick={{fontSize:12}} /><Tooltip /><Bar dataKey="absences" name="Absences" radius={[4,4,0,0]}>{dayOfWeekP4.map((e,i)=><Cell key={i} fill={e.day==="Mon"?"#BF4B08":e.day==="Fri"?"#F6B725":"#263D39"} />)}</Bar></BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ marginTop:12, padding:12, backgroundColor:"#fefce8", borderRadius:8, fontSize:13, color:"#92400e" }}><strong>Monday absences are 63% above mid-week average.</strong> Friday is 28% above.</div>
+                  </div>
+                  <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                    <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>Absence Type Distribution</div>
+                    <div style={{ height:240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart><Pie data={absTypePie} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={{stroke:"#9ca3af"}}>{absTypePie.map((e,i)=><Cell key={i} fill={e.color} />)}</Pie><Tooltip /></PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div style={{ display:"flex", gap:16, justifyContent:"center", marginTop:8 }}>{absTypePie.map(t=>(<span key={t.name} style={{ display:"flex", alignItems:"center", gap:4, fontSize:12 }}><span style={{ width:10, height:10, borderRadius:2, backgroundColor:t.color }} />{t.name}: {t.value}</span>))}</div>
+                  </div>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>Shift Breakdown</div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                    <thead><tr style={{ borderBottom:"2px solid #e5e7eb" }}>{["SHIFT","HEADCOUNT","ABSENCES","RATE","NCNS","CALL-OFFS","PTO","vs LAST MONTH"].map(h=><th key={h} style={{ textAlign:"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:12 }}>{h}</th>)}</tr></thead>
+                    <tbody>{shiftDataP4.map((r,i)=>(
+                      <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                        <td style={{ padding:12, fontWeight:600, color:"#263D39" }}><span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", backgroundColor:r.color, marginRight:8 }} />{r.shift}</td>
+                        <td style={{ padding:12 }}>{r.headcount.toLocaleString()}</td>
+                        <td style={{ padding:12, fontWeight:600 }}>{r.absences}</td>
+                        <td style={{ padding:12 }}><span style={{ color:parseFloat(r.rate)>5.5?"#BF4B08":parseFloat(r.rate)>4.5?"#92400e":"#16a34a", fontWeight:700 }}>{r.rate}</span></td>
+                        <td style={{ padding:12, color:r.ncns>15?"#991b1b":"#374151", fontWeight:r.ncns>15?700:400 }}>{r.ncns}</td>
+                        <td style={{ padding:12 }}>{r.calloffs}</td><td style={{ padding:12 }}>{r.pto}</td>
+                        <td style={{ padding:12, fontWeight:600, color:r.trend.includes("↑")?"#BF4B08":r.trend.includes("↓")?"#16a34a":"#6b7280" }}>{r.trend}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                  <div style={{ marginTop:16, padding:12, backgroundColor:"#fff7ed", borderRadius:8, fontSize:13, color:"#92400e" }}><strong>3rd shift has the highest absence rate (6.1%)</strong> and the steepest increase (+0.8% vs last month).</div>
+                </div>
+              </div>
+            )}
+
+            {/* MANAGERS */}
+            {tab4==="managers" && (
+              <div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                    <div><div style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>Manager-Level Attendance</div><div style={{ fontSize:13, color:"#6b7280" }}>TEDS-powered drill-down · {filtMgrs.length} managers shown</div></div>
+                    <div style={{ fontSize:12, color:"#6b7280", backgroundColor:"#F5FAF8", padding:"6px 12px", borderRadius:6 }}>Sorted by absence rate (highest first)</div>
+                  </div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                    <thead><tr style={{ borderBottom:"2px solid #e5e7eb" }}>{["MANAGER","DIVISION","SHIFT","HEADCOUNT","ABSENCES","RATE","NCNS","TREND","FLAGS"].map(h=><th key={h} style={{ textAlign:"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:11 }}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {[...filtMgrs].sort((a,b)=>parseFloat(b.rate)-parseFloat(a.rate)).map((m,i)=>(
+                        <tr key={i} style={{ borderBottom:"1px solid #f3f4f6", backgroundColor:m.flag?"#fff7ed":"transparent" }}>
+                          <td style={{ padding:12, fontWeight:600, color:"#263D39" }}>{m.name}</td>
+                          <td style={{ padding:12, color:"#6b7280", fontSize:13 }}>{m.division}</td>
+                          <td style={{ padding:12, fontSize:13 }}>{m.shift}</td>
+                          <td style={{ padding:12 }}>{m.headcount}</td>
+                          <td style={{ padding:12, fontWeight:600 }}>{m.absences}</td>
+                          <td style={{ padding:12 }}><span style={{ display:"inline-block", padding:"2px 10px", borderRadius:12, fontWeight:700, fontSize:13, backgroundColor:parseFloat(m.rate)>6?"#fef2f2":parseFloat(m.rate)>4.5?"#fefce8":"#f0fdf4", color:parseFloat(m.rate)>6?"#991b1b":parseFloat(m.rate)>4.5?"#92400e":"#16a34a" }}>{m.rate}</span></td>
+                          <td style={{ padding:12, color:m.ncns>2?"#991b1b":"#374151", fontWeight:m.ncns>2?700:400 }}>{m.ncns}</td>
+                          <td style={{ padding:12, fontSize:16, color:m.trend==="↑"?"#BF4B08":m.trend==="↓"?"#16a34a":"#6b7280" }}>{m.trend}</td>
+                          <td style={{ padding:12 }}>
+                            {m.flag==="high_ncns" && <span style={{ backgroundColor:"#fef2f2", color:"#991b1b", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:600 }}>High NCNS</span>}
+                            {m.flag==="high_rate" && <span style={{ backgroundColor:"#fff7ed", color:"#BF4B08", padding:"2px 8px", borderRadius:4, fontSize:11, fontWeight:600 }}>High Rate</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {filtMgrs.filter(m=>m.flag).length > 0 && (
+                    <div style={{ marginTop:20, padding:16, backgroundColor:"#fefce8", border:"1px solid #fde68a", borderRadius:8 }}>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#92400e", marginBottom:4 }}>Flagged Managers</div>
+                      <div style={{ fontSize:13, color:"#92400e", lineHeight:1.6 }}>
+                        {filtMgrs.filter(m=>m.flag==="high_ncns").length > 0 && <div>{filtMgrs.filter(m=>m.flag==="high_ncns").length} manager(s) have elevated NCNS rates — may indicate notification issues or engagement concerns.</div>}
+                        {filtMgrs.filter(m=>m.flag==="high_rate").length > 0 && <div>{filtMgrs.filter(m=>m.flag==="high_rate").length} manager(s) have absence rates above 7% — significantly above 4.9% average.</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ marginTop:16, padding:12, backgroundColor:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:8, fontSize:12, color:"#6b7280", display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:14 }}>ℹ️</span>
+                  <span><strong>TEDS coverage:</strong> Manager data available for 87% of employees. 13% mapped to division only.</span>
+                </div>
+              </div>
+            )}
+
+            {/* DIVISIONS */}
+            {tab4==="divisions" && (
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb" }}>
+                <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Division Comparison</div>
+                <div style={{ fontSize:13, color:"#6b7280", marginBottom:20 }}>Cross-site performance · last 30 days</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:20 }}>
+                  {divCompP4.map((d,i)=>(
+                    <div key={i} style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:20, borderTop:`4px solid ${i===0?"#6DAEA2":i===1?"#F6B725":"#BF4B08"}` }}>
+                      <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:16 }}>{d.division}</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                        <div><div style={{ fontSize:11, color:"#6b7280", fontWeight:500 }}>Headcount</div><div style={{ fontSize:20, fontWeight:700, color:"#263D39" }}>{d.headcount.toLocaleString()}</div></div>
+                        <div><div style={{ fontSize:11, color:"#6b7280", fontWeight:500 }}>Absence Rate</div><div style={{ fontSize:20, fontWeight:700, color:parseFloat(d.rate)>5.3?"#BF4B08":"#263D39" }}>{d.rate}</div><div style={{ fontSize:11, fontWeight:600, color:d.change.includes("↓")?"#16a34a":"#BF4B08" }}>{d.change} vs last month</div></div>
+                        <div><div style={{ fontSize:11, color:"#6b7280", fontWeight:500 }}>NCNS Rate</div><div style={{ fontSize:20, fontWeight:700, color:parseFloat(d.ncnsRate)>1?"#991b1b":"#263D39" }}>{d.ncnsRate}</div></div>
+                        <div><div style={{ fontSize:11, color:"#6b7280", fontWeight:500 }}>Avg Notification</div><div style={{ fontSize:20, fontWeight:700, color:"#263D39" }}>{d.avgNotify}</div></div>
+                      </div>
+                      <div style={{ marginTop:12, padding:8, backgroundColor:"#F5FAF8", borderRadius:6, fontSize:12, color:"#6b7280" }}>Peak day: <strong>{d.topDay}</strong></div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop:20, padding:16, backgroundColor:"#fefce8", border:"1px solid #fde68a", borderRadius:8 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#92400e", marginBottom:4 }}>Cross-Division Insights</div>
+                  <div style={{ fontSize:13, color:"#92400e", lineHeight:1.6 }}><strong>Irving, TX</strong> has the highest absence and NCNS rates, both trending up. Aurora is trending down. All sites peak on Monday.</div>
+                </div>
+              </div>
+            )}
+
+            {/* ROI */}
+            {tab4==="roi" && (
+              <div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+                    <div><div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>ROI Baseline — HelloFresh</div><div style={{ fontSize:13, color:"#6b7280" }}>Auto-calculated · 287 days of data</div></div>
+                    <div style={{ backgroundColor:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"6px 12px", fontSize:12, color:"#16a34a", fontWeight:600 }}>✓ 90+ days — ROI active</div>
+                  </div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                    <thead><tr style={{ borderBottom:"2px solid #e5e7eb" }}>{["METRIC","BASELINE (FIRST 30 DAYS)","CURRENT (LAST 30 DAYS)","CHANGE","METHODOLOGY"].map(h=><th key={h} style={{ textAlign:"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:11 }}>{h}</th>)}</tr></thead>
+                    <tbody>{roiBaseP4.map((r,i)=>(
+                      <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                        <td style={{ padding:12, fontWeight:600, color:"#263D39" }}>{r.metric}</td>
+                        <td style={{ padding:12, color:"#9ca3af" }}>{r.before}</td>
+                        <td style={{ padding:12, fontWeight:700, color:"#263D39" }}>{r.current}</td>
+                        <td style={{ padding:12 }}><span style={{ display:"inline-block", padding:"2px 10px", borderRadius:12, fontWeight:700, fontSize:13, backgroundColor:"#f0fdf4", color:"#16a34a" }}>{r.change}</span></td>
+                        <td style={{ padding:12, fontSize:12, color:"#9ca3af" }}>{r.method}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:20, border:"1px solid #e5e7eb", marginBottom:24 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:"#263D39", marginBottom:8 }}>Methodology</div>
+                  <div style={{ fontSize:13, color:"#6b7280", lineHeight:1.6 }}>ROI baseline compares your <strong>first 30 days</strong> on TeamSense to your <strong>most recent 30 days</strong>. We show the data and trend — you draw the conclusions. These are descriptive, not predictive.</div>
+                </div>
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24, border:"2px solid #F6B725" }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:8 }}>Ready for Your QBR</div>
+                  <div style={{ fontSize:14, color:"#374151", lineHeight:1.6, marginBottom:16 }}>Export a formatted report with ROI metrics, attendance trends, and content insights. Includes TeamSense branding and all active filters. No CSM needed.</div>
+                  <div style={{ display:"flex", gap:12 }}>
+                    <button style={{ padding:"10px 24px", borderRadius:8, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:14, fontWeight:700, cursor:"pointer" }}>Export Formatted Report (PDF)</button>
+                    <button style={{ padding:"10px 24px", borderRadius:8, border:"1px solid #d1d5db", backgroundColor:"white", color:"#263D39", fontSize:14, fontWeight:600, cursor:"pointer" }}>Export Raw Data (CSV)</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Export Modal */}
+          {showExport && (
+            <div style={{ position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.5)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000 }} onClick={()=>setShowExport(false)}>
+              <div style={{ backgroundColor:"white", borderRadius:16, padding:32, maxWidth:520, width:"90%" }} onClick={e=>e.stopPropagation()}>
+                <div style={{ fontSize:18, fontWeight:700, color:"#263D39", marginBottom:16 }}>Export Report</div>
+                <div style={{ fontSize:13, color:"#6b7280", marginBottom:20, lineHeight:1.5 }}>Includes all visible metrics, respecting your active TEDS filters.</div>
+                <div style={{ backgroundColor:"#F5FAF8", borderRadius:8, padding:16, marginBottom:20 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"#6b7280", marginBottom:8 }}>EXPORT INCLUDES:</div>
+                  <div style={{ fontSize:13, color:"#263D39", lineHeight:1.8 }}>✓ Attendance trends (weekly, by type)<br/>✓ Day-of-week and shift patterns<br/>✓ Manager-level breakdown<br/>✓ Division comparison<br/>✓ ROI baseline metrics<br/>✓ Filters: {selDiv}, {selShift}, {dateRng}</div>
+                </div>
+                <div style={{ display:"flex", gap:12 }}>
+                  <button style={{ flex:1, padding:"12px 20px", borderRadius:8, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:14, fontWeight:700, cursor:"pointer" }}>Download PDF</button>
+                  <button style={{ flex:1, padding:"12px 20px", borderRadius:8, border:"1px solid #d1d5db", backgroundColor:"white", color:"#263D39", fontSize:14, fontWeight:600, cursor:"pointer" }}>Download CSV</button>
+                </div>
+                <button onClick={()=>setShowExport(false)} style={{ width:"100%", marginTop:12, padding:8, border:"none", backgroundColor:"transparent", color:"#6b7280", fontSize:13, cursor:"pointer" }}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Legacy Notice — Capability #7 */}
+          <div style={{ margin:"0 32px 16px", padding:12, backgroundColor:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:8, fontSize:12, color:"#6b7280", display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:14 }}>ℹ️</span>
+            <span>Your existing Attendance Insights (7 cards) is still available under <strong>Reports → Attendance Insights</strong>. This new view adds TEDS filtering, content insights, and ROI metrics.</span>
+          </div>
+          <div style={{ textAlign:"center", padding:"8px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TIP v1 — Attendance Analytics (PRD-Faithful) · TeamSense Research Prototype</div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       APP SHELL — Tab Switcher
+       ============================================================ */
+    function App() {
+      const [active, setActive] = useState("content-insights");
+      const protos = [
+        { id:"content-insights", label:"Content Insights", version:"v1" },
+        { id:"content-impact", label:"Content Impact", version:"v1.5" },
+        { id:"unified", label:"Unified Dashboard", version:"v1" },
+        { id:"attendance", label:"Attendance Analytics", version:"PRD" },
+      ];
+
+      return (
+        <div>
+          <div id="proto-nav">
+            <div className="nav-brand">TIP PROTOTYPES</div>
+            {protos.map(p => (
+              <button key={p.id} className={active===p.id?"active":""} onClick={() => setActive(p.id)}>
+                {p.label}
+                <span className={`label ${p.version==="v1"?"label-v1":p.version==="PRD"?"label-prd":"label-v15"}`}>{p.version}</span>
+              </button>
+            ))}
+          </div>
+          {active === "content-insights" && <ContentInsights />}
+          {active === "content-impact" && <ContentImpact />}
+          {active === "unified" && <UnifiedDashboard />}
+          {active === "attendance" && <AttendanceAnalytics />}
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById("root"));
   </script>
 </body>
 </html>
