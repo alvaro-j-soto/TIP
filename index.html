@@ -36,13 +36,6 @@
     }
     #proto-nav button:hover { color: white; }
     #proto-nav button.active { color: white; border-bottom-color: #F6B725; }
-    #proto-nav .label {
-      font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
-      margin-left: 6px; vertical-align: middle;
-    }
-    .label-v1 { background: #6DAEA2; color: white; }
-    .label-v15 { background: #F6B725; color: #263D39; }
-    .label-prd { background: #263D39; color: #F6B725; }
   </style>
 </head>
 <body>
@@ -72,39 +65,74 @@
   <script type="text/babel">
     const { useState } = React;
     const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-            LineChart, Line, Legend, Cell, Area, AreaChart, ReferenceLine, PieChart, Pie } = Recharts;
+            LineChart, Line, Legend, Cell, Area, AreaChart, ReferenceLine, PieChart, Pie,
+            ComposedChart } = Recharts;
 
     /* ============================================================
        PROTOTYPE 1: CONTENT INSIGHTS DASHBOARD
        ============================================================ */
     const topicData = [
-      { topic: "PTO / Time Off Policy", questions: 847, trend: "+28%", quality: 62, gap: true, priority: 1 },
-      { topic: "Shift Schedule & Hours", questions: 623, trend: "+12%", quality: 78, gap: false, priority: null },
-      { topic: "Benefits & Insurance", questions: 541, trend: "+5%", quality: 45, gap: true, priority: 2 },
-      { topic: "Pay & Direct Deposit", questions: 498, trend: "-3%", quality: 88, gap: false, priority: null },
-      { topic: "Safety Protocols", questions: 412, trend: "+41%", quality: 34, gap: true, priority: 3 },
-      { topic: "Meal Kit Assembly Process", questions: 387, trend: "+8%", quality: 71, gap: false, priority: null },
-      { topic: "Attendance Points", questions: 356, trend: "+15%", quality: 52, gap: true, priority: 4 },
-      { topic: "Holiday Schedule", questions: 298, trend: "-12%", quality: 91, gap: false, priority: null },
-      { topic: "Parking & Transportation", questions: 187, trend: "+2%", quality: 83, gap: false, priority: null },
-      { topic: "Uniform & Dress Code", questions: 134, trend: "-5%", quality: 89, gap: false, priority: null },
+      { topic: "Attendance Points & Balances", questions: 378, trend: "+15%", quality: 52, gap: true, priority: 1 },
+      { topic: "Call-Offs / PTO / Leave", questions: 302, trend: "+28%", quality: 62, gap: true, priority: 2 },
+      { topic: "Schedules / Hours", questions: 244, trend: "+5%", quality: 78, gap: false, priority: null },
+      { topic: "Pay & Perks", questions: 195, trend: "-3%", quality: 88, gap: false, priority: null },
+      { topic: "Timekeeping & Punch Corrections", questions: 168, trend: "+12%", quality: 71, gap: false, priority: null },
+      { topic: "Attendance Policy Clarifications", questions: 134, trend: "+8%", quality: 45, gap: true, priority: 3 },
+      { topic: "Helpdesk / Workday / ARC Navigation", questions: 112, trend: "+41%", quality: 34, gap: true, priority: 4 },
+      { topic: "Human Help Escalations", questions: 84, trend: "-5%", quality: 100, gap: false, priority: null },
+      { topic: "Other / Off Topic", questions: 66, trend: "-12%", quality: 100, gap: false, priority: null },
     ];
 
-    const trendDataP1 = [
-      { month: "Sep", total: 2890, resolved: 2340 },
-      { month: "Oct", total: 3120, resolved: 2510 },
-      { month: "Nov", total: 3450, resolved: 2680 },
-      { month: "Dec", total: 2980, resolved: 2390 },
-      { month: "Jan", total: 3680, resolved: 2870 },
-      { month: "Feb", total: 4283, resolved: 3210 },
+    // Overview tab: weekly volume with 4-week rolling average
+    const weeklyVolumeData = [
+      { week:"Sep 1", q:262 },{ week:"Sep 8", q:278 },{ week:"Sep 15", q:290 },{ week:"Sep 22", q:304 },
+      { week:"Oct 6", q:295 },{ week:"Oct 13", q:308 },{ week:"Oct 20", q:312 },{ week:"Oct 27", q:309 },
+      { week:"Nov 3", q:322 },{ week:"Nov 10", q:338 },{ week:"Nov 17", q:345 },{ week:"Nov 24", q:348 },
+      { week:"Dec 1", q:310 },{ week:"Dec 8", q:285 },{ week:"Dec 15", q:278 },{ week:"Dec 22", q:296 },
+      { week:"Jan 5", q:342 },{ week:"Jan 12", q:358 },{ week:"Jan 19", q:368 },{ week:"Jan 26", q:375 },
+      { week:"Feb 2", q:392 },{ week:"Feb 9", q:408 },{ week:"Feb 16", q:425 },{ week:"Feb 22", q:458 },
+    ].map((d, i, arr) => {
+      const window = arr.slice(Math.max(0, i - 3), i + 1);
+      const avg = Math.round(window.reduce((s, x) => s + x.q, 0) / window.length);
+      return { ...d, avg };
+    });
+
+    // Monthly volume for chart + reporting
+    const monthlyVolumeData = [
+      { month:"Sep", q:1134, avgDay:38, change:null },
+      { month:"Oct", q:1224, avgDay:39, change:"+8%" },
+      { month:"Nov", q:1353, avgDay:45, change:"+11%" },
+      { month:"Dec", q:1169, avgDay:38, change:"-14%" },
+      { month:"Jan", q:1443, avgDay:47, change:"+23%" },
+      { month:"Feb", q:1683, avgDay:56, change:"+17%" },
     ];
 
-    const barChartData = topicData.map(d => ({
-      name: d.topic.length > 20 ? d.topic.substring(0, 18) + "..." : d.topic,
-      fullName: d.topic, questions: d.questions, quality: d.quality, gap: d.gap,
-    }));
+
+    // Overview tab: pie chart data — derived from topicData
+    const pieColors = ["#263D39","#6DAEA2","#F6B725","#E8825A","#3b82f6","#8b5cf6","#ec4899","#64748b","#d1d5db"];
+    const pieCategoryData = topicData.map((d,i) => ({ name: d.topic.length > 20 ? d.topic.substring(0,18)+"..." : d.topic, fullName: d.topic, value: d.questions, color: pieColors[i] }));
+
+    // Category Detail tab: topic breakdown by division
+    const divisionCategoryData = [
+      { division: "Aurora, CO", "Attendance": 178, "Call-Offs / PTO": 82, "Schedules": 68, "Pay & Perks": 72, "Timekeeping": 58, "Policy": 92, "Helpdesk": 42, "Other": 32 },
+      { division: "Newark, NJ", "Attendance": 85, "Call-Offs / PTO": 142, "Schedules": 118, "Pay & Perks": 38, "Timekeeping": 48, "Policy": 22, "Helpdesk": 18, "Other": 16 },
+      { division: "Irving, TX", "Attendance": 115, "Call-Offs / PTO": 78, "Schedules": 58, "Pay & Perks": 65, "Timekeeping": 52, "Policy": 38, "Helpdesk": 118, "Other": 48 },
+    ];
+    const divCatKeys = ["Attendance","Call-Offs / PTO","Schedules","Pay & Perks","Timekeeping","Policy","Helpdesk","Other"];
+    const divCatColors = ["#263D39","#6DAEA2","#F6B725","#E8825A","#3b82f6","#8b5cf6","#ec4899","#d1d5db"];
+
+    // Content Gaps tab: resolution quality % over time
+    const qualityTrendData = [
+      { month: "Sep", quality: 64 },
+      { month: "Oct", quality: 66 },
+      { month: "Nov", quality: 65 },
+      { month: "Dec", quality: 68 },
+      { month: "Jan", quality: 70 },
+      { month: "Feb", quality: 72 },
+    ];
 
     const QualityBadge = ({ score }) => {
+      if (score === null) return <span style={{ fontSize:13, color:"#9ca3af" }}>N/A</span>;
       const color = score >= 80 ? "#16a34a" : score >= 60 ? "#F6B725" : "#BF4B08";
       const bg = score >= 80 ? "#f0fdf4" : score >= 60 ? "#fefce8" : "#fff7ed";
       const label = score >= 80 ? "Strong" : score >= 60 ? "Fair" : "Needs Work";
@@ -118,28 +146,130 @@
 
     const TrendBadge = ({ trend }) => {
       const isUp = trend.startsWith("+");
-      const val = parseInt(trend);
-      const color = Math.abs(val) > 20 ? "#BF4B08" : isUp ? "#263D39" : "#16a34a";
-      return <span style={{ color, fontSize:13, fontWeight:600 }}>{isUp ? "↑" : "↓"} {trend}</span>;
+      return <span style={{ color:"#6b7280", fontSize:13, fontWeight:500 }}>{isUp ? "↑" : "↓"} {trend}</span>;
+    };
+
+    // Module-scope data shared between ContentInsights and ContentImpact
+    const gaps = topicData.filter(d => d.gap).sort((a, b) => a.priority - b.priority);
+
+    const recentQuestions = {
+      "Attendance Points & Balances": [
+        {text:"How many attendance points do I have?", site:"Aurora, CO"},
+        {text:"When do my points expire?", site:"Newark, NJ"},
+        {text:"How many points before I get a warning?", site:"Irving, TX"},
+      ],
+      "Call-Offs / PTO / Leave": [
+        {text:"How do I call off for my shift tomorrow?", site:"Aurora, CO"},
+        {text:"How many PTO days do I have left this year?", site:"Newark, NJ"},
+        {text:"Can I roll over my PTO to next year?", site:"Irving, TX"},
+      ],
+      "Attendance Policy Clarifications": [
+        {text:"What happens at 6 attendance points?", site:"Aurora, CO"},
+        {text:"Does FMLA affect my attendance points?", site:"Newark, NJ"},
+        {text:"Can my manager make exceptions to the policy?", site:"Irving, TX"},
+      ],
+      "Helpdesk / Workday / ARC Navigation": [
+        {text:"How do I find my pay stub in Workday?", site:"Aurora, CO"},
+        {text:"Where do I go to change my direct deposit?", site:"Irving, TX"},
+        {text:"How do I swap shifts in ARC?", site:"Newark, NJ"},
+      ],
+    };
+
+    const gapStatuses = {
+      "Attendance Points & Balances": {label:"In Progress", bg:"#eff6ff", color:"#1d4ed8", icon:"🔄"},
+      "Call-Offs / PTO / Leave": {label:"Acknowledged", bg:"#fefce8", color:"#92400e", icon:"👁"},
+      "Attendance Policy Clarifications": {label:"New", bg:"#fef2f2", color:"#991b1b", icon:"🆕"},
+      "Helpdesk / Workday / ARC Navigation": {label:"New", bg:"#fef2f2", color:"#991b1b", icon:"🆕"}
+    };
+
+    const gapAges = {
+      "Attendance Points & Balances": "12 days",
+      "Call-Offs / PTO / Leave": "45 days",
+      "Attendance Policy Clarifications": "28 days",
+      "Helpdesk / Workday / ARC Navigation": "14 days"
     };
 
     const gapDetails = {
-      "PTO / Time Off Policy": "Employees frequently ask about PTO accrual rates, rollover policies, and blackout dates. Many questions go unresolved or get routed to HR. Content exists but doesn't cover site-specific rules.",
-      "Benefits & Insurance": "Open enrollment questions spike seasonally. Current EA content covers basic plan info but can't answer questions about eligibility changes, life events, or HSA details.",
-      "Safety Protocols": "Sharp increase tied to new OSHA requirements. EA has outdated safety content that doesn't reflect January 2026 policy updates. High volume of repeat questions about PPE requirements.",
-      "Attendance Points": "Employees ask about their current balance, how points are calculated, and when points expire. EA cannot pull live points data — routes all questions to HR.",
+      "Attendance Points & Balances": "Employees frequently ask about current point balances, how points are calculated, and expiration timelines. Employee Assistant cannot pull live points data — routes most questions to HR. Points/Balance tool exists but doesn't cover policy questions.",
+      "Call-Offs / PTO / Leave": "High volume around PTO accrual rates, rollover policies, and call-off procedures. Content exists but doesn't cover site-specific rules. Employees at each site have different blackout periods and accrual rates.",
+      "Attendance Policy Clarifications": "Questions about attendance thresholds, progressive discipline steps, and how exceptions work. Current content is generic — doesn't reflect site-specific policy nuances or recent policy updates.",
+      "Helpdesk / Workday / ARC Navigation": "Sharp increase tied to new system rollouts. Employees asking how to navigate Workday for pay stubs, ARC for scheduling, and general IT helpdesk routing. Employee Assistant has outdated or missing content for these workflows.",
     };
 
     const recDetails = {
-      "PTO / Time Off Policy": { text: "Update EA knowledge base with site-specific PTO rules for Aurora, Newark, and Irving. Current content is generic — employees at each site have different accrual rates and blackout periods.", impact: "Could resolve ~320 questions/month that currently go to HR." },
-      "Benefits & Insurance": { text: "Add life event and eligibility change content. Most unresolved questions are about mid-year changes (marriage, new child, address change) — not basic plan info.", impact: "Could resolve ~298 questions/month during non-enrollment periods." },
-      "Safety Protocols": { text: "Replace outdated safety content with January 2026 OSHA updates. Specific gap: PPE requirements for cold storage areas and new chemical handling procedures.", impact: "Could resolve ~272 questions/month. Also a compliance risk — employees may be following outdated procedures." },
-      "Attendance Points": { text: "Add FAQ content explaining points calculation, expiration timelines, and threshold consequences. Note: Live balance lookup requires integration work (future roadmap).", impact: "Could resolve ~171 questions/month. Remaining gap (live balance) requires product work." },
+      "Attendance Points & Balances": { text: "Add FAQ content explaining points calculation, expiration timelines, and threshold consequences. Note: Live balance lookup requires the Points/Balance tool — ensure tool coverage is complete for policy-adjacent questions.", impact: "Could resolve ~181 questions/month that currently go to HR." },
+      "Call-Offs / PTO / Leave": { text: "Update Employee Assistant knowledge base with site-specific call-off procedures, PTO accrual rules, and leave policies for each site. Current content is generic — employees need site-specific answers.", impact: "Could resolve ~115 questions/month during non-peak periods." },
+      "Attendance Policy Clarifications": { text: "Add content covering progressive discipline steps, exception processes, and recent policy updates. Cross-reference with Attendance Points content to avoid duplication.", impact: "Could resolve ~74 questions/month. Also reduces confusion that leads to escalations." },
+      "Helpdesk / Workday / ARC Navigation": { text: "Create step-by-step guides for common Workday tasks (pay stubs, tax forms) and ARC scheduling workflows. Partner with IT for helpdesk routing content.", impact: "Could resolve ~74 questions/month. Fast-growing topic — content gap will widen without action." },
     };
 
-    function ContentInsights() {
-      const [activeView, setActiveView] = useState("topics");
-      const gaps = topicData.filter(d => d.gap).sort((a, b) => a.priority - b.priority);
+    // Expanded sample questions by category for Tab 1
+    const sampleQuestionsByCategory = {
+      "Attendance Points & Balances": [
+        {q:"How many attendance points do I have?", freq:"~85/mo", site:"All", type:"tool-backed"},
+        {q:"When do my points expire?", freq:"~64/mo", site:"All", type:"content-backed"},
+        {q:"How many points before I get a warning?", freq:"~38/mo", site:"All", type:"content-backed"},
+        {q:"Am I close to a written warning?", freq:"~28/mo", site:"All", type:"tool-backed"},
+        {q:"How are attendance points calculated?", freq:"~22/mo", site:"Aurora, CO", type:"content-backed"},
+      ],
+      "Call-Offs / PTO / Leave": [
+        {q:"How do I call off for my shift tomorrow?", freq:"~72/mo", site:"All", type:"content-backed"},
+        {q:"Can I roll over my PTO to next year?", freq:"~48/mo", site:"Newark, NJ", type:"content-backed"},
+        {q:"How many PTO days do I have left?", freq:"~45/mo", site:"All", type:"tool-backed"},
+        {q:"What's the bereavement leave policy?", freq:"~18/mo", site:"All", type:"content-backed"},
+        {q:"Does calling off count against my PTO?", freq:"~15/mo", site:"Irving, TX", type:"content-backed"},
+      ],
+      "Schedules / Hours": [
+        {q:"What time does my shift start?", freq:"~41/mo", site:"All", type:"tool-backed"},
+        {q:"How do I swap shifts in ARC?", freq:"~35/mo", site:"All", type:"content-backed"},
+        {q:"Can I change my availability?", freq:"~24/mo", site:"Aurora, CO", type:"content-backed"},
+      ],
+      "Pay & Perks": [
+        {q:"When is payday?", freq:"~32/mo", site:"All", type:"content-backed"},
+        {q:"How do I find my pay stub in Workday?", freq:"~28/mo", site:"Irving, TX", type:"content-backed"},
+        {q:"What's the employee discount?", freq:"~19/mo", site:"All", type:"content-backed"},
+      ],
+      "Timekeeping & Punch Corrections": [
+        {q:"I forgot to clock in — what do I do?", freq:"~31/mo", site:"All", type:"content-backed"},
+        {q:"How do I submit a punch correction?", freq:"~26/mo", site:"All", type:"content-backed"},
+        {q:"My hours look wrong on my timecard", freq:"~18/mo", site:"Newark, NJ", type:"fallback"},
+      ],
+      "Attendance Policy Clarifications": [
+        {q:"What happens at 6 attendance points?", freq:"~24/mo", site:"Aurora, CO", type:"content-backed"},
+        {q:"Does FMLA affect my attendance points?", freq:"~19/mo", site:"Newark, NJ", type:"fallback"},
+        {q:"Can my manager make exceptions to the policy?", freq:"~14/mo", site:"Irving, TX", type:"fallback"},
+      ],
+      "Helpdesk / Workday / ARC Navigation": [
+        {q:"How do I find my pay stub in Workday?", freq:"~51/mo", site:"Irving, TX", type:"fallback"},
+        {q:"Where do I change my direct deposit?", freq:"~29/mo", site:"All", type:"fallback"},
+        {q:"How do I swap shifts in ARC?", freq:"~35/mo", site:"Newark, NJ", type:"fallback"},
+      ],
+      "Human Help Escalations": [
+        {q:"I need to talk to HR", freq:"~22/mo", site:"All", type:"routed"},
+        {q:"Can I speak to a manager?", freq:"~18/mo", site:"All", type:"routed"},
+        {q:"I want to file a complaint", freq:"~12/mo", site:"All", type:"routed"},
+      ],
+      "Other / Off Topic": [
+        {q:"What's the weather like today?", freq:"~11/mo", site:"All", type:"routed"},
+        {q:"Can you tell me a joke?", freq:"~8/mo", site:"All", type:"routed"},
+        {q:"Hello / Hi / Hey", freq:"~34/mo", site:"All", type:"routed"},
+      ],
+    };
+
+    const responseTypeBadge = (type) => {
+      const styles = {
+        "content-backed": { bg:"#f0fdf4", color:"#16a34a", label:"Answered (Policy)" },
+        "tool-backed": { bg:"#eff6ff", color:"#1d4ed8", label:"Answered (Tool)" },
+        "fallback": { bg:"#fff7ed", color:"#BF4B08", label:"Content Gap" },
+        "routed": { bg:"#f9fafb", color:"#6b7280", label:"Redirected" },
+      };
+      const s = styles[type] || styles["fallback"];
+      return <span style={{ backgroundColor:s.bg, color:s.color, padding:"2px 8px", borderRadius:4, fontSize:10, fontWeight:600, display:"inline-block", minWidth:120, textAlign:"center" }}>{s.label}</span>;
+    };
+
+    function ContentInsights({ showNotes }) {
+      const [activeTab, setActiveTab] = useState("overview");
+      const [volumeView, setVolumeView] = useState("monthly");
 
       return (
         <div style={{ backgroundColor:"#F5FAF8", minHeight:"100vh" }}>
@@ -147,6 +277,7 @@
             <div>
               <div style={{ fontSize:13, opacity:0.7, marginBottom:4, letterSpacing:0.5 }}>TEAMSENSE INSIGHTS</div>
               <div style={{ fontSize:24, fontWeight:700 }}>Content Insights</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:4 }}>Understand who's using Employee Assistant, what they're asking, and where content needs improvement</div>
             </div>
             <div style={{ display:"flex", gap:8 }}>
               {["All Sites","Aurora, CO","Newark, NJ","Irving, TX"].map(s => (
@@ -164,190 +295,342 @@
             <button style={{ padding:"6px 16px", borderRadius:6, border:"none", backgroundColor:"#F6B725", color:"#263D39", fontSize:13, fontWeight:600, cursor:"pointer" }}>Export Report</button>
           </div>
 
-          <div style={{ padding:"24px 32px 0", display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16 }}>
-            {[
-              { label:"Total Questions", value:"4,283", sub:"Last 30 days", accent:false },
-              { label:"Avg Resolution Quality", value:"69%", sub:"↑ 3% from last month", accent:false },
-              { label:"Content Gaps Found", value:"4", sub:"Topics needing attention", accent:true },
-              { label:"Top Trending Topic", value:"Safety Protocols", sub:"↑ 41% this month", accent:true },
-            ].map((c,i) => (
-              <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:20, border: c.accent?"2px solid #F6B725":"1px solid #e5e7eb" }}>
-                <div style={{ fontSize:13, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{c.label}</div>
-                <div style={{ fontSize:28, fontWeight:700, color:"#263D39" }}>{c.value}</div>
-                <div style={{ fontSize:12, color:"#6DAEA2", marginTop:4, fontWeight:500 }}>{c.sub}</div>
-              </div>
-            ))}
+          {/* Top-level Metric Cards — always visible */}
+          <div style={{ padding:"24px 32px 0" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:16, marginBottom:0 }}>
+              {[
+                { label:"Total Questions", value:"1,683", sub:"Last 30 days", accent:false },
+                { label:"Avg Resolution Quality", value:"72%", sub:"↑ 3% from last month", accent:false },
+                { label:"Content Gaps Found", value:"4", sub:"Topics needing attention", accent:true },
+                { label:"Top Gap Topic", value:"Attendance Points", sub:"52% quality · 378 questions/mo", accent:true },
+              ].map((c,i) => (
+                <div key={i} style={{ backgroundColor:"white", borderRadius:12, padding:20, border: c.accent?"2px solid #F6B725":"1px solid #e5e7eb" }}>
+                  <div style={{ fontSize:13, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{c.label}</div>
+                  <div style={{ fontSize:28, fontWeight:700, color:"#263D39" }}>{c.value}</div>
+                  <div style={{ fontSize:12, color:"#6DAEA2", marginTop:4, fontWeight:500 }}>{c.sub}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div style={{ padding:"24px 32px 0", display:"flex", gap:4 }}>
-            {[{id:"topics",label:"Topic Demand"},{id:"gaps",label:"Content Gaps"},{id:"recommendations",label:"What to Fix Next"}].map(tab => (
-              <button key={tab.id} onClick={() => setActiveView(tab.id)} style={{ padding:"10px 20px", borderRadius:"8px 8px 0 0", border:"none", cursor:"pointer", fontSize:14, fontWeight:600, backgroundColor: activeView===tab.id?"white":"transparent", color: activeView===tab.id?"#263D39":"#6b7280", borderBottom: activeView===tab.id?"2px solid #F6B725":"2px solid transparent" }}>
+          {/* Tab Bar — below metrics */}
+          <div style={{ padding:"16px 32px 0", display:"flex", gap:4, borderBottom:"1px solid #e5e7eb" }}>
+            {[{id:"overview",label:"Overview"},{id:"questions",label:"Questions by Topic"},{id:"gaps",label:"Resolving Content Gaps"}].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{ padding:"10px 20px", border:"none", cursor:"pointer", fontSize:14, fontWeight:600, backgroundColor:"transparent", color: activeTab===tab.id?"#263D39":"#6b7280", borderBottom: activeTab===tab.id?"3px solid #F6B725":"3px solid transparent", marginBottom:-1 }}>
                 {tab.label}
-                {tab.id==="gaps" && <span style={{ marginLeft:8, backgroundColor:"#BF4B08", color:"white", borderRadius:10, padding:"1px 8px", fontSize:11, fontWeight:700 }}>4</span>}
               </button>
             ))}
           </div>
 
-          <div style={{ padding:"0 32px 32px" }}>
-            <div style={{ backgroundColor:"white", borderRadius:"0 12px 12px 12px", padding:24, minHeight:400 }}>
-              {activeView === "topics" && (
-                <div>
-                  <div style={{ marginBottom:20 }}>
-                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>What Employees Are Asking About</div>
-                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Ranked by question volume — last 30 days</div>
+          {/* ===== TAB 1: OVERVIEW ===== */}
+          {activeTab === "overview" && (
+            <div style={{ padding:"24px 32px" }}>
+
+              {/* What Employees Are Asking About — bar chart + table */}
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24, marginBottom:24 }}>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>What Employees Are Asking About</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Ranked by question volume — last 30 days</div>
+                </div>
+                <div style={{ height: topicData.length * 26 + 20, marginBottom:12 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[...topicData].sort((a,b) => b.questions - a.questions)} layout="vertical" barCategoryGap="15%" margin={{ left:10, right:20, top:0, bottom:0 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize:10 }} hide />
+                      <YAxis type="category" dataKey="topic" tick={{ fontSize:10 }} width={190} axisLine={false} tickLine={false} />
+                      <Tooltip formatter={(val) => [val.toLocaleString() + " questions"]} />
+                      <Bar dataKey="questions" radius={[0,3,3,0]}>
+                        {[...topicData].sort((a,b) => b.questions - a.questions).map((d,i) => (
+                          <Cell key={i} fill={d.gap ? "#BF4B08" : "#6DAEA2"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display:"flex", gap:16, fontSize:12, marginBottom:20 }}>
+                  <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#BF4B08", display:"inline-block" }} /> Content gap</span>
+                  <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#6DAEA2", display:"inline-block" }} /> Healthy</span>
+                </div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                  <thead>
+                    <tr style={{ borderBottom:"2px solid #e5e7eb" }}>
+                      {["TOPIC","QUESTIONS","% OF TOTAL","RESOLUTION QUALITY"].map(h => (
+                        <th key={h} style={{ padding:"8px 10px", textAlign:"left", fontWeight:600, color:"#6b7280", fontSize:11, letterSpacing:"0.5px" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...topicData].sort((a,b) => b.questions - a.questions).map((d,i) => {
+                      const totalQ = topicData.reduce((s,t) => s + t.questions, 0);
+                      return (
+                      <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                        <td style={{ padding:"10px 10px", color:"#374151" }}>{d.topic}</td>
+                        <td style={{ padding:"10px 10px", fontWeight:600, color:"#263D39" }}>{d.questions.toLocaleString()}</td>
+                        <td style={{ padding:"10px 10px", color:"#6b7280" }}>{Math.round(d.questions / totalQ * 100)}%</td>
+                        <td style={{ padding:"10px 10px" }}><QualityBadge score={d.quality} /></td>
+                      </tr>
+                    ); })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Question Volume — toggleable monthly/weekly */}
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24, marginBottom:24 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+                  <div>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>Question Volume</div>
+                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>{volumeView === "monthly" ? "Monthly totals — last 6 months" : "Weekly totals — last 6 months, with 4-week rolling average"}</div>
                   </div>
-                  <div style={{ height:280, marginBottom:24 }}>
+                  <div style={{ display:"flex", borderRadius:8, border:"1px solid #e5e7eb", overflow:"hidden" }}>
+                    {["monthly","weekly"].map(v => (
+                      <button key={v} onClick={() => setVolumeView(v)} style={{ padding:"6px 14px", fontSize:12, fontWeight:600, border:"none", cursor:"pointer", backgroundColor: volumeView===v ? "#263D39" : "white", color: volumeView===v ? "white" : "#6b7280" }}>
+                        {v === "monthly" ? "Monthly" : "Weekly"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {volumeView === "monthly" ? (
+                  <div style={{ height:240 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={barChartData} layout="vertical" margin={{ left:140, right:20 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize:12 }} />
-                        <YAxis type="category" dataKey="name" tick={{ fontSize:12 }} width={140} />
-                        <Tooltip formatter={(val) => [val, "Questions"]} />
-                        <Bar dataKey="questions" radius={[0,4,4,0]}>
-                          {barChartData.map((entry, index) => <Cell key={index} fill={entry.gap ? "#BF4B08" : "#6DAEA2"} />)}
-                        </Bar>
-                      </BarChart>
+                      <AreaChart data={monthlyVolumeData}>
+                        <defs>
+                          <linearGradient id="monthVolGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6DAEA2" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#6DAEA2" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize:12 }} />
+                        <YAxis tick={{ fontSize:12 }} />
+                        <Tooltip content={({active, payload}) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0].payload;
+                          return (
+                            <div style={{ backgroundColor:"white", border:"1px solid #e5e7eb", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                              <div style={{ fontWeight:600 }}>{d.month}</div>
+                              <div style={{ color:"#6DAEA2" }}>{d.q.toLocaleString()} questions</div>
+                              <div style={{ color:"#6b7280" }}>{d.avgDay} avg/day</div>
+                              {d.change && <div style={{ color: d.change.startsWith("+") ? "#16a34a" : "#BF4B08", fontWeight:600 }}>{d.change} vs prev month</div>}
+                            </div>
+                          );
+                        }} />
+                        <Area type="monotone" dataKey="q" stroke="#6DAEA2" strokeWidth={2} fill="url(#monthVolGrad)" dot={{ r:5, fill:"#6DAEA2", stroke:"white", strokeWidth:2 }} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  <div style={{ display:"flex", gap:16, marginBottom:20, fontSize:13 }}>
-                    <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#BF4B08" }} /> Content gap</span>
-                    <span style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ width:12, height:12, borderRadius:2, backgroundColor:"#6DAEA2" }} /> Healthy</span>
+                ) : (
+                  <div>
+                    <div style={{ display:"flex", gap:16, marginBottom:12, fontSize:12 }}>
+                      <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:4, backgroundColor:"#6DAEA2", display:"inline-block", borderRadius:2 }} /> Weekly total</span>
+                      <span style={{ display:"flex", alignItems:"center", gap:5 }}><span style={{ width:12, height:2, backgroundColor:"#263D39", display:"inline-block", borderRadius:2 }} /> 4-week avg</span>
+                    </div>
+                    <div style={{ height:240 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={weeklyVolumeData} barCategoryGap="20%">
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="week" tick={{ fontSize:10 }} interval={3} />
+                          <YAxis tick={{ fontSize:12 }} />
+                          <Tooltip content={({active, payload}) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload;
+                            return (
+                              <div style={{ backgroundColor:"white", border:"1px solid #e5e7eb", borderRadius:8, padding:"8px 12px", fontSize:12 }}>
+                                <div style={{ fontWeight:600 }}>Week of {d.week}</div>
+                                <div style={{ color:"#6DAEA2" }}>{d.q} questions</div>
+                                <div style={{ color:"#263D39" }}>4-week avg: {d.avg}</div>
+                              </div>
+                            );
+                          }} />
+                          <Bar dataKey="q" fill="#6DAEA2" radius={[3,3,0,0]} />
+                          <Line type="monotone" dataKey="avg" stroke="#263D39" strokeWidth={2} dot={false} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                )}
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24, marginBottom:24 }}>
+                {/* Site at a Glance */}
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Site at a Glance</div>
+                    <div style={{ fontSize:13, color:"#6b7280" }}>Employee Assistant usage by site — last 30 days</div>
+                  </div>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                     <thead>
                       <tr style={{ borderBottom:"2px solid #e5e7eb" }}>
-                        {["TOPIC","QUESTIONS","TREND","RESOLUTION QUALITY"].map((h,i) => (
-                          <th key={h} style={{ textAlign: i===1?"right":i>1?"center":"left", padding:"10px 12px", color:"#6b7280", fontWeight:600, fontSize:12 }}>{h}</th>
+                        {["SITE","HEADCOUNT","EMPLOYEES USING EA","REACH","QUESTIONS"].map(h => (
+                          <th key={h} style={{ padding:"8px 10px", textAlign:"left", fontWeight:600, color:"#6b7280", fontSize:11, letterSpacing:"0.5px" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {topicData.map((row, i) => (
-                        <tr key={i} style={{ borderBottom:"1px solid #f3f4f6", backgroundColor: row.gap?"#fff7ed":"transparent" }}>
-                          <td style={{ padding:"12px", fontWeight:500, color:"#263D39" }}>{row.gap && <span style={{ color:"#BF4B08", marginRight:6 }}>⚠</span>}{row.topic}</td>
-                          <td style={{ textAlign:"right", padding:"12px", fontWeight:600, color:"#263D39" }}>{row.questions.toLocaleString()}</td>
-                          <td style={{ textAlign:"center", padding:"12px" }}><TrendBadge trend={row.trend} /></td>
-                          <td style={{ textAlign:"center", padding:"12px" }}><QualityBadge score={row.quality} /></td>
+                      {[
+                        { div:"Aurora, CO", headcount:"1,850", users:418, adopt:"22.6%", q:624 },
+                        { div:"Newark, NJ", headcount:"1,419", users:298, adopt:"21.0%", q:487 },
+                        { div:"Irving, TX", headcount:"2,096", users:371, adopt:"17.7%", q:572 }
+                      ].map((r,i) => (
+                        <tr key={i} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                          <td style={{ padding:"10px", fontWeight:600, color:"#263D39" }}>{r.div}</td>
+                          <td style={{ padding:"10px", color:"#6b7280" }}>{r.headcount}</td>
+                          <td style={{ padding:"10px", color:"#374151" }}>{r.users.toLocaleString()}</td>
+                          <td style={{ padding:"10px" }}>
+                            <span style={{ backgroundColor: parseFloat(r.adopt) >= 20 ? "#f0fdf4" : "#fefce8", color: parseFloat(r.adopt) >= 20 ? "#16a34a" : "#92400e", padding:"2px 8px", borderRadius:4, fontWeight:600, fontSize:12 }}>{r.adopt}</span>
+                          </td>
+                          <td style={{ padding:"10px", color:"#374151" }}>{r.q.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
 
-              {activeView === "gaps" && (
-                <div>
-                  <div style={{ marginBottom:20 }}>
-                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>Content Gaps</div>
-                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Topics where employees ask frequently but the EA can't answer well</div>
+                {/* Language Breakdown */}
+                <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>Language Breakdown</div>
+                    <div style={{ fontSize:13, color:"#6b7280" }}>Questions by language — last 30 days</div>
                   </div>
-                  {gaps.map((gap, i) => (
-                    <div key={i} style={{ border:"1px solid #fed7aa", borderRadius:12, padding:20, marginBottom:16, backgroundColor: i===0?"#fff7ed":"white" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <span style={{ backgroundColor:"#BF4B08", color:"white", borderRadius:12, padding:"2px 10px", fontSize:11, fontWeight:700 }}>Priority #{gap.priority}</span>
-                        <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{gap.topic}</span>
-                      </div>
-                      <div style={{ fontSize:13, color:"#6b7280", marginBottom:12 }}>{gap.questions.toLocaleString()} questions this month ({gap.trend} vs. last month) · Resolution quality: {gap.quality}%</div>
-                      <div style={{ fontSize:13, color:"#263D39", backgroundColor:"#F5FAF8", padding:12, borderRadius:8, lineHeight:1.5 }}>{gapDetails[gap.topic]}</div>
-                      <div style={{ marginTop:12, backgroundColor:"#fef3c7", borderRadius:8, padding:10, fontSize:12, color:"#92400e", fontWeight:500 }}>
-                        <strong>Employee Impact:</strong> ~{Math.round(gap.questions * (1 - gap.quality / 100))} employees/month not getting answers
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeView === "recommendations" && (
-                <div>
-                  <div style={{ marginBottom:20 }}>
-                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>What to Fix Next</div>
-                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Prioritized by employee impact (volume × low resolution quality)</div>
-                  </div>
-                  {gaps.map((gap, i) => (
-                    <div key={i} style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:20, marginBottom:16, borderLeft:`4px solid ${i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2"}` }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                          <span style={{ width:28, height:28, borderRadius:"50%", backgroundColor: i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2", color:"white", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{i+1}</span>
-                          <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{gap.topic}</span>
+                  {[{lang:"English",pct:68,count:1144,color:"#263D39"},{lang:"Spanish",pct:24,count:404,color:"#6DAEA2"},{lang:"Haitian Creole",pct:5,count:84,color:"#F6B725"},{lang:"Other",pct:3,count:51,color:"#BF4B08"}].map(l => (
+                    <div key={l.lang} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+                      <div style={{ width:110, fontSize:13, fontWeight:500, color:"#263D39" }}>{l.lang}</div>
+                      <div style={{ flex:1, height:24, backgroundColor:"#f3f4f6", borderRadius:4, overflow:"hidden" }}>
+                        <div style={{ width:`${l.pct}%`, height:"100%", backgroundColor:l.color, borderRadius:4, display:"flex", alignItems:"center", paddingLeft:8 }}>
+                          <span style={{ fontSize:11, fontWeight:600, color:"white" }}>{l.pct}%</span>
                         </div>
-                        <QualityBadge score={gap.quality} />
                       </div>
-                      <div style={{ backgroundColor:"#F5FAF8", borderRadius:8, padding:16, fontSize:13, lineHeight:1.6 }}>
-                        <div style={{ fontWeight:700, marginBottom:8, color:"#6DAEA2" }}>💡 Recommended Action</div>
-                        <p style={{ margin:"0 0 8px" }}>{recDetails[gap.topic]?.text}</p>
-                        <p style={{ margin:0, fontWeight:600 }}>Expected impact: {recDetails[gap.topic]?.impact}</p>
-                      </div>
+                      <div style={{ width:50, fontSize:12, color:"#6b7280", textAlign:"right" }}>{l.count.toLocaleString()}</div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ padding:"0 32px 32px" }}>
-            <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
-              <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Question Volume Trend</div>
-              <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>Total questions vs. resolved — last 6 months</div>
-              <div style={{ height:220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trendDataP1}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" tick={{ fontSize:12 }} />
-                    <YAxis tick={{ fontSize:12 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="total" stroke="#263D39" strokeWidth={2} name="Total Questions" dot={{ r:4 }} />
-                    <Line type="monotone" dataKey="resolved" stroke="#6DAEA2" strokeWidth={2} name="Resolved" dot={{ r:4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
               </div>
             </div>
-          </div>
-          <div style={{ textAlign:"center", padding:"16px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TIP v1 — Content Insights Dashboard · TeamSense Research Prototype</div>
+          )}
+
+          {/* ===== TAB 2: TOPIC DETAIL ===== */}
+          {activeTab === "questions" && (
+            <div style={{ padding:"24px 32px" }}>
+              {/* Sample Questions by Category */}
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
+                <div style={{ marginBottom:20 }}>
+                  <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>Sample Questions by Topic</div>
+                  <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Representative questions in each bucket — showing how the Employee Assistant groups employee questions</div>
+                </div>
+                {topicData.map((topic, ti) => {
+                  const questions = sampleQuestionsByCategory[topic.topic];
+                  if (!questions) return null;
+                  return (
+                    <div key={ti} style={{ marginBottom:20, border:"1px solid #e5e7eb", borderRadius:10, overflow:"hidden" }}>
+                      <div style={{ backgroundColor:"#f9fafb", padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:"1px solid #e5e7eb" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:14, fontWeight:700, color:"#263D39" }}>{topic.topic}</span>
+                          <span style={{ fontSize:12, color:"#6b7280" }}>· {topic.questions} questions/mo</span>
+                        </div>
+                      </div>
+                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                        <thead>
+                          <tr style={{ borderBottom:"1px solid #f3f4f6" }}>
+                            {["QUESTION","FREQUENCY","SITE","STATUS"].map((h,i) => (
+                              <th key={h} style={{ textAlign: i===1||i===3?"center":"left", padding:"8px 16px", color:"#6b7280", fontWeight:600, fontSize:11, width: i===0?"auto":i===1?"90px":i===2?"100px":"130px" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {questions.map((q,qi) => (
+                            <tr key={qi} style={{ borderBottom:"1px solid #f3f4f6" }}>
+                              <td style={{ padding:"8px 16px", color:"#263D39" }}>"{q.q}"</td>
+                              <td style={{ textAlign:"center", padding:"8px 16px", fontWeight:600, color:"#263D39", fontSize:12 }}>{q.freq}</td>
+                              <td style={{ padding:"8px 16px", color:"#6DAEA2", fontSize:12 }}>{q.site}</td>
+                              <td style={{ textAlign:"center", padding:"8px 16px" }}>{responseTypeBadge(q.type)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ===== TAB 3: CONTENT GAP DETAIL ===== */}
+          {activeTab === "gaps" && (
+            <div style={{ padding:"24px 32px" }}>
+              {/* Gap Cards */}
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24, marginBottom:24 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                  <div>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#263D39" }}>Gap Details</div>
+                    <div style={{ fontSize:13, color:"#6b7280", marginTop:4 }}>Topics where employees ask frequently but the Employee Assistant can't answer well — prioritized by impact</div>
+                  </div>
+                </div>
+
+                {gaps.map((gap, i) => {
+                  const status = gapStatuses[gap.topic] || {label:"New",bg:"#fef2f2",color:"#991b1b",icon:"🆕"};
+                  return (
+                  <div key={i} style={{ border:"1px solid #e5e7eb", borderRadius:12, padding:20, marginBottom:16, borderLeft:`4px solid ${i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2"}` }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ width:28, height:28, borderRadius:"50%", backgroundColor: i===0?"#BF4B08":i===1?"#F6B725":"#6DAEA2", color:"white", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700 }}>{i+1}</span>
+                        <span style={{ fontSize:16, fontWeight:700, color:"#263D39" }}>{gap.topic}</span>
+                        <span style={{ backgroundColor:status.bg, color:status.color, borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600 }}>{status.icon} {status.label}</span>
+                        <span style={{ fontSize:12, color:"#9ca3af" }}>· {gapAges[gap.topic]} old</span>
+                      </div>
+                      <QualityBadge score={gap.quality} />
+                    </div>
+
+                    <div style={{ fontSize:13, color:"#6b7280", marginBottom:12 }}>{gap.questions.toLocaleString()} questions this month ({gap.trend} vs. last month) · ~{Math.round(gap.questions * (1 - gap.quality / 100))} employees/month not getting answers</div>
+
+                    <div style={{ fontSize:13, color:"#263D39", backgroundColor:"#F5FAF8", padding:12, borderRadius:8, lineHeight:1.5, marginBottom:12 }}>{gapDetails[gap.topic]}</div>
+
+                    {recentQuestions[gap.topic] && (
+                      <div style={{ backgroundColor:"#f9fafb", borderRadius:8, padding:12, border:"1px solid #e5e7eb", marginBottom:12 }}>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#6b7280", marginBottom:8 }}>UNANSWERED / POORLY ANSWERED QUESTIONS</div>
+                        {recentQuestions[gap.topic].map((q,qi) => (
+                          <div key={qi} style={{ fontSize:12, color:"#374151", padding:"4px 0", display:"flex", justifyContent:"space-between" }}>
+                            <span>"{q.text}"</span>
+                            <span style={{ fontSize:11, color:"#6DAEA2", fontWeight:500, whiteSpace:"nowrap", marginLeft:12 }}>{q.site}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ backgroundColor:"#F5FAF8", borderRadius:8, padding:14, fontSize:13, lineHeight:1.5, border:"1px solid #d1fae5" }}>
+                      <div style={{ fontWeight:700, marginBottom:6, color:"#6DAEA2", fontSize:12 }}>RECOMMENDED ACTION</div>
+                      <p style={{ margin:"0 0 6px", color:"#263D39" }}>{recDetails[gap.topic]?.text}</p>
+                      <p style={{ margin:0, fontWeight:600, color:"#16a34a" }}>Expected impact: {recDetails[gap.topic]?.impact}</p>
+                    </div>
+                  </div>
+                );
+                })}
+              </div>
+
+              {/* Resolution Quality Trend */}
+              <div style={{ backgroundColor:"white", borderRadius:12, padding:24 }}>
+                <div style={{ fontSize:16, fontWeight:700, color:"#263D39", marginBottom:4 }}>Resolution Quality Over Time</div>
+                <div style={{ fontSize:13, color:"#6b7280", marginBottom:16 }}>Are we getting better at answering employee questions? — last 6 months</div>
+                <div style={{ height:240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={qualityTrendData}>
+                      <defs><linearGradient id="qualityGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6DAEA2" stopOpacity={0.3} /><stop offset="95%" stopColor="#6DAEA2" stopOpacity={0} /></linearGradient></defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" tick={{ fontSize:12 }} />
+                      <YAxis tick={{ fontSize:12 }} domain={[50, 85]} tickFormatter={v => `${v}%`} />
+                      <Tooltip formatter={v => [`${v}%`, "Resolution Quality"]} />
+                      <Area type="monotone" dataKey="quality" stroke="#6DAEA2" strokeWidth={2} fill="url(#qualityGrad)" name="Resolution Quality" dot={{ r:4, fill:"#6DAEA2" }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ marginTop:12, padding:12, backgroundColor:"#f0fdf4", borderRadius:8, fontSize:13, color:"#16a34a" }}>Trending up: +8 percentage points over 6 months (64% → 72%). Resolving the 4 active gaps could push this above 80%.</div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ textAlign:"center", padding:"16px 32px 32px", fontSize:12, color:"#9ca3af", fontStyle:"italic" }}>TeamSense Insights — Content Analytics · Research Prototype</div>
         </div>
       );
     }
-
-    /* ============================================================
-       PROTOTYPE 2: CONTENT IMPROVEMENT IMPACT
-       ============================================================ */
-    const contentUpdates = [
-      { id:1, topic:"PTO / Time Off Policy", updatedBy:"Stacy M.", updatedDate:"Jan 15, 2026", before:{questions:847,quality:42,fallbackRate:58}, after:{questions:518,quality:89,fallbackRate:11}, status:"improved", details:"Added site-specific accrual rules for Aurora, Newark, and Irving. Added blackout date calendar. Added rollover policy FAQ.",
-        trendData:[{week:"Dec 23",questions:210,quality:41},{week:"Dec 30",questions:225,quality:40},{week:"Jan 6",questions:198,quality:43},{week:"Jan 13",questions:215,quality:42},{week:"Jan 20",questions:156,quality:72},{week:"Jan 27",questions:138,quality:84},{week:"Feb 3",questions:125,quality:88},{week:"Feb 10",questions:130,quality:89},{week:"Feb 17",questions:127,quality:89}], refLine:"Jan 13" },
-      { id:2, topic:"Safety Protocols", updatedBy:"Marcus J.", updatedDate:"Feb 3, 2026", before:{questions:412,quality:34,fallbackRate:66}, after:{questions:380,quality:61,fallbackRate:39}, status:"improving", details:"Updated PPE requirements for cold storage. Added new chemical handling procedures. Still missing: forklift certification renewal process.",
-        trendData:[{week:"Jan 6",questions:95,quality:33},{week:"Jan 13",questions:108,quality:35},{week:"Jan 20",questions:112,quality:34},{week:"Jan 27",questions:98,quality:33},{week:"Feb 3",questions:102,quality:35},{week:"Feb 10",questions:94,quality:55},{week:"Feb 17",questions:88,quality:61}], refLine:"Feb 3" },
-      { id:3, topic:"Benefits & Insurance", updatedBy:null, updatedDate:null, before:{questions:541,quality:45,fallbackRate:55}, after:null, status:"no_update", details:"No content update made. Gap identified 45 days ago. Life event and eligibility change content still missing.",
-        trendData:[{week:"Jan 6",questions:130,quality:46},{week:"Jan 13",questions:138,quality:44},{week:"Jan 20",questions:142,quality:45},{week:"Jan 27",questions:135,quality:44},{week:"Feb 3",questions:148,quality:43},{week:"Feb 10",questions:140,quality:45},{week:"Feb 17",questions:145,quality:45}], refLine:null },
-    ];
-
-    const statusColors = {
-      improved: { bg:"#f0fdf4", border:"#bbf7d0", text:"#16a34a", label:"✓ Significant Improvement" },
-      improving: { bg:"#fefce8", border:"#fde68a", text:"#92400e", label:"↗ Improving — Monitor" },
-      no_update: { bg:"#fef2f2", border:"#fecaca", text:"#991b1b", label:"⚠ No Action Taken" },
-    };
-
-    const ImpactCard = ({ label, before, after, unit, inverse }) => {
-      if (after === null) return (
-        <div style={{ flex:1, backgroundColor:"#f9fafb", borderRadius:8, padding:16, textAlign:"center" }}>
-          <div style={{ fontSize:12, color:"#9ca3af", marginBottom:4, fontWeight:500 }}>{label}</div>
-          <div style={{ fontSize:24, fontWeight:700, color:"#9ca3af" }}>—</div>
-          <div style={{ fontSize:11, color:"#9ca3af" }}>No update yet</div>
-        </div>
-      );
-      const improved = inverse ? after < before : after > before;
-      const changePercent = Math.round(Math.abs(after - before) / before * 100);
-      return (
-        <div style={{ flex:1, backgroundColor: improved?"#f0fdf4":"#fff7ed", borderRadius:8, padding:16, textAlign:"center" }}>
-          <div style={{ fontSize:12, color:"#6b7280", marginBottom:4, fontWeight:500 }}>{label}</div>
-          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:12, marginBottom:4 }}>
-            <span style={{ fontSize:18, color:"#9ca3af", textDecoration:"line-through" }}>{before}{unit}</span>
-            <span style={{ fontSize:14, color:"#6b7280" }}>→</span>
-            <span style={{ fontSize:24, fontWeight:700, color: improved?"#16a34a":"#BF4B08" }}>{after}{unit}</span>
-          </div>
-          <div style={{ fontSize:12, fontWeight:600, color: improved?"#16a34a":"#BF4B08" }}>{improved?"↓":"↑"} {changePercent}% {improved?"improvement":"regression"}</div>
-        </div>
-      );
-    };
-
     function ContentImpact() {
       const [sel, setSel] = useState(0);
       const cur = contentUpdates[sel];
@@ -1027,7 +1310,6 @@
             {protos.map(p => (
               <button key={p.id} className={active===p.id?"active":""} onClick={() => setActive(p.id)}>
                 {p.label}
-                <span className={`label ${p.version==="v1"?"label-v1":p.version==="PRD"?"label-prd":"label-v15"}`}>{p.version}</span>
               </button>
             ))}
           </div>
